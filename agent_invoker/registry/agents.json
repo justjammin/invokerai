@@ -1,0 +1,2148 @@
+{
+  "version": "1.0",
+  "agents": [
+    {
+      "id": "architect-reviewer",
+      "category": "architecture",
+      "description": "Evaluates system design, architectural patterns, and technology choices at the macro level",
+      "domains": [
+        "backend",
+        "devops"
+      ],
+      "triggers": [
+        "architect",
+        "system design",
+        "diagram",
+        "pattern",
+        "trade-off",
+        "adr",
+        "explain",
+        "how does",
+        "why"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "api-designer",
+      "category": "architecture",
+      "description": "Designs REST, GraphQL, and gRPC APIs with versioning, contracts, and documentation",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "api design",
+        "endpoint design",
+        "openapi",
+        "swagger",
+        "graphql schema",
+        "grpc",
+        "contract"
+      ],
+      "tools": [
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "microservices-architect",
+      "category": "architecture",
+      "description": "Designs distributed system architecture and decomposes monoliths into microservices",
+      "domains": [
+        "backend",
+        "devops"
+      ],
+      "triggers": [
+        "microservices",
+        "decompose",
+        "service mesh",
+        "distributed",
+        "monolith",
+        "bounded context"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "code-reviewer",
+      "category": "code-review",
+      "description": "Reviews code for quality, security vulnerabilities, and best practices",
+      "domains": [
+        "backend",
+        "frontend"
+      ],
+      "triggers": [
+        "review",
+        "audit",
+        "code review",
+        "second opinion",
+        "security review",
+        "vulnerability",
+        "owasp",
+        "xss",
+        "injection"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "legacy-modernizer",
+      "category": "code-review",
+      "description": "Modernizes legacy systems with incremental migration strategies and risk mitigation",
+      "domains": [
+        "backend",
+        "frontend"
+      ],
+      "triggers": [
+        "legacy",
+        "modernize",
+        "migrate",
+        "old code",
+        "upgrade",
+        "refactor legacy",
+        "technical debt"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "refactoring-specialist",
+      "category": "code-review",
+      "description": "Transforms poorly structured code into clean, maintainable systems without changing behavior",
+      "domains": [
+        "backend",
+        "frontend"
+      ],
+      "triggers": [
+        "refactor",
+        "clean up",
+        "restructure",
+        "extract",
+        "simplify",
+        "duplication"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "ai-writing-auditor",
+      "category": "content",
+      "description": "Audits content for AI writing patterns and rewrites text to remove them",
+      "domains": [],
+      "triggers": [
+        "ai writing",
+        "audit prose",
+        "ai patterns",
+        "humanize",
+        "rewrite content"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "content-marketer",
+      "category": "content",
+      "description": "Develops content strategies, SEO-optimized content, and multi-channel campaigns",
+      "domains": [],
+      "triggers": [
+        "content strategy",
+        "seo",
+        "blog post",
+        "marketing copy",
+        "campaign",
+        "content plan"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "data-engineer",
+      "category": "database",
+      "description": "Designs and builds data pipelines, ETL/ELT processes, and data infrastructure",
+      "domains": [
+        "database",
+        "devops"
+      ],
+      "triggers": [
+        "pipeline",
+        "etl",
+        "elt",
+        "data ingestion",
+        "data platform",
+        "airflow",
+        "spark",
+        "kafka"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "database-administrator",
+      "category": "database",
+      "description": "Manages database infrastructure, high availability, and disaster recovery",
+      "domains": [
+        "database"
+      ],
+      "triggers": [
+        "dba",
+        "high availability",
+        "replication",
+        "backup",
+        "restore",
+        "disaster recovery",
+        "database admin"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "database-optimizer",
+      "category": "database",
+      "description": "Analyzes slow queries, optimizes database performance, and implements indexing strategies",
+      "domains": [
+        "database"
+      ],
+      "triggers": [
+        "slow query",
+        "index",
+        "query optimization",
+        "explain plan",
+        "n+1",
+        "database performance",
+        "schema migration"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "postgres-pro",
+      "category": "database",
+      "description": "Deep PostgreSQL expertise \u2014 performance, replication, configuration tuning, advanced features",
+      "domains": [
+        "database"
+      ],
+      "triggers": [
+        "postgres",
+        "postgresql",
+        "pg_",
+        "pgbouncer",
+        "vacuum",
+        "pg_stat"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "debugger",
+      "category": "debugging",
+      "description": "Diagnoses and fixes bugs, identifies root causes from error logs and stack traces",
+      "domains": [
+        "backend",
+        "frontend",
+        "database"
+      ],
+      "triggers": [
+        "bug",
+        "broken",
+        "not working",
+        "failing",
+        "error",
+        "crash",
+        "traceback",
+        "exception",
+        "undefined",
+        "fix",
+        "debug"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "error-detective",
+      "category": "debugging",
+      "description": "Correlates errors across services, identifies root causes, prevents future failures",
+      "domains": [
+        "backend",
+        "devops"
+      ],
+      "triggers": [
+        "correlate errors",
+        "cross-service",
+        "root cause",
+        "error pattern",
+        "multiple services failing",
+        "distributed trace"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "cloud-architect",
+      "category": "devops",
+      "description": "Designs and optimizes cloud infrastructure at scale \u2014 multi-cloud, migrations, DR, cost",
+      "domains": [
+        "devops"
+      ],
+      "triggers": [
+        "cloud",
+        "aws",
+        "gcp",
+        "azure",
+        "terraform",
+        "infrastructure",
+        "deploy",
+        "kubernetes",
+        "k8s",
+        "docker"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "git-workflow-manager",
+      "category": "devops",
+      "description": "Designs Git workflows, branching strategies, and merge management",
+      "domains": [
+        "devops"
+      ],
+      "triggers": [
+        "git workflow",
+        "branching strategy",
+        "merge",
+        "rebase",
+        "git flow",
+        "trunk based"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "kubernetes-specialist",
+      "category": "devops",
+      "description": "Designs, deploys, configures, and troubleshoots Kubernetes clusters in production",
+      "domains": [
+        "devops"
+      ],
+      "triggers": [
+        "kubernetes",
+        "k8s",
+        "helm",
+        "pod",
+        "deployment",
+        "ingress",
+        "cluster",
+        "namespace",
+        "kubectl"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "documentation-engineer",
+      "category": "documentation",
+      "description": "Creates comprehensive documentation systems \u2014 API docs, tutorials, guides",
+      "domains": [],
+      "triggers": [
+        "document",
+        "docs",
+        "api reference",
+        "tutorial",
+        "guide",
+        "documentation system"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "readme-generator",
+      "category": "documentation",
+      "description": "Generates maintainer-ready READMEs from repository reality with zero hallucination",
+      "domains": [],
+      "triggers": [
+        "readme",
+        "write readme",
+        "generate readme"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "technical-writer",
+      "category": "documentation",
+      "description": "Creates API references, user guides, SDK documentation, and getting-started guides",
+      "domains": [],
+      "triggers": [
+        "write docs",
+        "user guide",
+        "sdk docs",
+        "getting started",
+        "write documentation",
+        "changelog"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "fintech-engineer",
+      "category": "enterprise",
+      "description": "Builds payment systems, financial integrations, and compliance-heavy financial applications",
+      "domains": [
+        "backend",
+        "security"
+      ],
+      "triggers": [
+        "payment",
+        "stripe",
+        "financial",
+        "compliance",
+        "pci",
+        "transaction",
+        "ledger",
+        "billing"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "iot-engineer",
+      "category": "enterprise",
+      "description": "Designs IoT solutions with device management, edge computing, and cloud integration",
+      "domains": [
+        "backend",
+        "devops"
+      ],
+      "triggers": [
+        "iot",
+        "device",
+        "edge computing",
+        "mqtt",
+        "embedded",
+        "sensor",
+        "firmware"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "m365-admin",
+      "category": "enterprise",
+      "description": "Automates Microsoft 365 \u2014 Exchange, Teams, SharePoint, license management, Graph API",
+      "domains": [
+        "devops"
+      ],
+      "triggers": [
+        "microsoft 365",
+        "m365",
+        "exchange",
+        "teams",
+        "sharepoint",
+        "graph api",
+        "azure ad",
+        "entra"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "backend-developer",
+      "category": "implementation",
+      "description": "Builds server-side APIs, microservices, and backend systems with robust architecture",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "api",
+        "endpoint",
+        "server",
+        "backend",
+        "rest",
+        "service",
+        "controller",
+        "middleware"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "frontend-developer",
+      "category": "implementation",
+      "description": "Builds complete frontend applications across React, Vue, and Angular",
+      "domains": [
+        "frontend"
+      ],
+      "triggers": [
+        "frontend",
+        "ui",
+        "component",
+        "css",
+        "html",
+        "react",
+        "vue",
+        "angular",
+        "svelte",
+        "browser"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "fullstack-developer",
+      "category": "implementation",
+      "description": "Builds complete features spanning database, API, and frontend layers as a unit",
+      "domains": [
+        "backend",
+        "frontend",
+        "database"
+      ],
+      "triggers": [
+        "full stack",
+        "fullstack",
+        "feature",
+        "end to end",
+        "build",
+        "implement",
+        "create"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "python-pro",
+      "category": "implementation",
+      "description": "Builds type-safe, production-ready Python for web APIs, utilities, and complex applications",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "python",
+        "fastapi",
+        "flask",
+        "django",
+        "asyncio",
+        "pydantic",
+        "celery"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "typescript-pro",
+      "category": "implementation",
+      "description": "Implements TypeScript with advanced type patterns, generics, and end-to-end type safety",
+      "domains": [
+        "frontend",
+        "backend"
+      ],
+      "triggers": [
+        "typescript",
+        "ts",
+        "type safety",
+        "generics",
+        "type inference",
+        "zod"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "javascript-pro",
+      "category": "implementation",
+      "description": "Builds modern JavaScript for browser, Node.js, and full-stack applications",
+      "domains": [
+        "frontend",
+        "backend"
+      ],
+      "triggers": [
+        "javascript",
+        "js",
+        "node",
+        "nodejs",
+        "es2023",
+        "esm",
+        "commonjs"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "golang-pro",
+      "category": "implementation",
+      "description": "Builds Go applications requiring concurrency, high-performance systems, and cloud-native patterns",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "go",
+        "golang",
+        "goroutine",
+        "channel",
+        "go routine",
+        "gin",
+        "fiber"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "react-specialist",
+      "category": "implementation",
+      "description": "Optimizes React applications \u2014 performance, React 18+, state management, architecture",
+      "domains": [
+        "frontend"
+      ],
+      "triggers": [
+        "react",
+        "hooks",
+        "useeffect",
+        "usememo",
+        "zustand",
+        "redux",
+        "context api",
+        "react query"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "fastapi-developer",
+      "category": "implementation",
+      "description": "Builds async Python APIs with FastAPI, Pydantic v2, and dependency injection",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "fastapi",
+        "pydantic",
+        "async api",
+        "asgi",
+        "starlette",
+        "uvicorn"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "django-developer",
+      "category": "implementation",
+      "description": "Builds Django 4+ web applications, REST APIs, and async views",
+      "domains": [
+        "backend",
+        "frontend"
+      ],
+      "triggers": [
+        "django",
+        "drf",
+        "django rest framework",
+        "django orm",
+        "django views"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "laravel-specialist",
+      "category": "implementation",
+      "description": "Builds Laravel 10+ applications, Eloquent models, queue systems, and API optimization",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "laravel",
+        "eloquent",
+        "artisan",
+        "blade",
+        "livewire",
+        "php laravel"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "symfony-specialist",
+      "category": "implementation",
+      "description": "Builds Symfony 6+/7+ applications, Doctrine ORM, Messenger component, and API Platform",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "symfony",
+        "doctrine",
+        "twig",
+        "api platform",
+        "messenger",
+        "php symfony"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "php-pro",
+      "category": "implementation",
+      "description": "PHP 8.3+ with strict typing, modern features, and enterprise framework expertise",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "php",
+        "composer",
+        "php 8",
+        "strict types",
+        "fibers"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "mcp-developer",
+      "category": "implementation",
+      "description": "Builds, debugs, and optimizes Model Context Protocol servers and clients",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "mcp",
+        "model context protocol",
+        "mcp server",
+        "mcp tool",
+        "mcp client"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "ui-designer",
+      "category": "implementation",
+      "description": "Designs visual interfaces, design systems, component libraries with accessibility",
+      "domains": [
+        "frontend"
+      ],
+      "triggers": [
+        "ui design",
+        "design system",
+        "component library",
+        "accessibility",
+        "figma",
+        "visual design",
+        "ux"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "agent-installer",
+      "category": "implementation",
+      "description": "Discovers, browses, and installs Claude Code agents from awesome-claude-code-subagents",
+      "domains": [],
+      "triggers": [
+        "install agent",
+        "find agent",
+        "browse agents",
+        "claude agent",
+        "subagent"
+      ],
+      "tools": [
+        "Bash",
+        "WebFetch",
+        "Read",
+        "Write",
+        "Glob",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "business-analyst",
+      "category": "implementation",
+      "description": "Analyzes business processes, gathers requirements, identifies process improvement opportunities",
+      "domains": [],
+      "triggers": [
+        "business analysis",
+        "requirements",
+        "user stories",
+        "process improvement",
+        "stakeholder",
+        "brd"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "project-manager",
+      "category": "implementation",
+      "description": "Establishes project plans, tracks execution, manages risks, controls budget and schedule",
+      "domains": [],
+      "triggers": [
+        "project plan",
+        "roadmap",
+        "milestone",
+        "risk",
+        "stakeholder",
+        "gantt",
+        "sprint planning"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "task-distributor",
+      "category": "implementation",
+      "description": "Distributes tasks across agents or workers, manages queues, and balances workloads",
+      "domains": [],
+      "triggers": [
+        "distribute tasks",
+        "queue",
+        "workload balance",
+        "worker pool"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": true
+    },
+    {
+      "id": "weave-planner",
+      "category": "implementation",
+      "description": "Decomposes complex tasks into a Weave execution graph before agents are dispatched",
+      "domains": [],
+      "triggers": [
+        "weave",
+        "execution graph",
+        "plan then execute",
+        "decompose before"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": true
+    },
+    {
+      "id": "wiki-scribe",
+      "category": "implementation",
+      "description": "Reads and writes LENA wiki memory nodes with schema validation and staleness detection",
+      "domains": [],
+      "triggers": [
+        "wiki",
+        "memory node",
+        "lena wiki",
+        "knowledge node"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "multi-agent-coordinator",
+      "category": "implementation",
+      "description": "Coordinates concurrent agents with communication, shared state, and failure handling",
+      "domains": [],
+      "triggers": [
+        "coordinate agents",
+        "multi-agent",
+        "parallel agents",
+        "agent communication"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": true
+    },
+    {
+      "id": "data-analyst",
+      "category": "ml",
+      "description": "Extracts insights from business data, creates dashboards and statistical reports",
+      "domains": [
+        "database"
+      ],
+      "triggers": [
+        "data analysis",
+        "dashboard",
+        "report",
+        "metrics",
+        "kpi",
+        "sql analysis",
+        "business intelligence"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "data-scientist",
+      "category": "ml",
+      "description": "Analyzes data patterns, builds predictive models, and extracts statistical insights",
+      "domains": [
+        "database",
+        "ml"
+      ],
+      "triggers": [
+        "data science",
+        "predictive model",
+        "hypothesis testing",
+        "statistical analysis",
+        "exploratory analysis"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "llm-architect",
+      "category": "ml",
+      "description": "Designs LLM systems for production \u2014 fine-tuning, RAG architectures, multi-model deployments",
+      "domains": [
+        "ml",
+        "backend"
+      ],
+      "triggers": [
+        "llm",
+        "rag",
+        "fine-tune",
+        "embedding",
+        "vector store",
+        "prompt engineering",
+        "langchain",
+        "langgraph"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "machine-learning-engineer",
+      "category": "ml",
+      "description": "Deploys, optimizes, and serves machine learning models at scale in production",
+      "domains": [
+        "ml",
+        "devops"
+      ],
+      "triggers": [
+        "ml model",
+        "model serving",
+        "inference",
+        "model deployment",
+        "mlops",
+        "feature store"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "ml-engineer",
+      "category": "ml",
+      "description": "Builds production ML systems \u2014 training pipelines, model serving, automated retraining",
+      "domains": [
+        "ml",
+        "backend"
+      ],
+      "triggers": [
+        "training pipeline",
+        "model training",
+        "pytorch",
+        "tensorflow",
+        "sklearn",
+        "ml pipeline"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "expo-react-native-expert",
+      "category": "mobile",
+      "description": "Builds Expo and React Native apps with native modules, navigation, animations, push notifications",
+      "domains": [
+        "frontend",
+        "mobile"
+      ],
+      "triggers": [
+        "expo",
+        "react native",
+        "mobile app",
+        "ios android",
+        "push notification",
+        "ota update"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "mobile-app-developer",
+      "category": "mobile",
+      "description": "Develops iOS and Android mobile applications with native or cross-platform implementation",
+      "domains": [
+        "frontend",
+        "mobile"
+      ],
+      "triggers": [
+        "ios",
+        "android",
+        "mobile",
+        "swift",
+        "kotlin",
+        "native app"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "mobile-developer",
+      "category": "mobile",
+      "description": "Builds cross-platform mobile applications with React Native and Flutter, 80%+ code sharing",
+      "domains": [
+        "frontend",
+        "mobile"
+      ],
+      "triggers": [
+        "flutter",
+        "cross platform",
+        "dart",
+        "react native cross"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "swift-expert",
+      "category": "mobile",
+      "description": "Builds native iOS, macOS, and server-side Swift with advanced concurrency and SwiftUI",
+      "domains": [
+        "frontend",
+        "mobile"
+      ],
+      "triggers": [
+        "swift",
+        "swiftui",
+        "uikit",
+        "combine",
+        "actor",
+        "async await swift",
+        "xcode"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "agent-organizer",
+      "category": "orchestration",
+      "description": "Assembles and optimizes multi-agent teams for complex projects requiring workflow coordination",
+      "domains": [],
+      "triggers": [
+        "agent team",
+        "assemble agents",
+        "agent workflow",
+        "coordinate team"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": true
+    },
+    {
+      "id": "context-manager",
+      "category": "orchestration",
+      "description": "Manages shared state, information retrieval, and data synchronization across agents",
+      "domains": [],
+      "triggers": [
+        "shared state",
+        "context sync",
+        "agent state",
+        "synchronize agents"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": true
+    },
+    {
+      "id": "workflow-orchestrator",
+      "category": "orchestration",
+      "description": "Designs and implements complex business process workflows with state management and error handling",
+      "domains": [],
+      "triggers": [
+        "workflow",
+        "state machine",
+        "business process",
+        "orchestrate",
+        "saga pattern"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": true
+    },
+    {
+      "id": "dx-optimizer",
+      "category": "performance",
+      "description": "Optimizes developer workflow \u2014 build times, feedback loops, testing efficiency, developer satisfaction",
+      "domains": [
+        "devops"
+      ],
+      "triggers": [
+        "dx",
+        "developer experience",
+        "build time",
+        "slow build",
+        "feedback loop",
+        "developer workflow"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "competitive-analyst",
+      "category": "research",
+      "description": "Analyzes competitors, benchmarks against market leaders, develops competitive strategy",
+      "domains": [],
+      "triggers": [
+        "competitor",
+        "competitive analysis",
+        "market leader",
+        "benchmark",
+        "market position"
+      ],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "project-idea-validator",
+      "category": "research",
+      "description": "Pressure-tests ideas with brutal honesty, competitor teardown, and go/no-go guidance",
+      "domains": [],
+      "triggers": [
+        "validate idea",
+        "idea review",
+        "go no go",
+        "market validation",
+        "pressure test"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "research-analyst",
+      "category": "research",
+      "description": "Conducts comprehensive research across multiple sources and synthesizes findings into insights",
+      "domains": [],
+      "triggers": [
+        "research",
+        "analyze",
+        "investigate",
+        "survey",
+        "literature review",
+        "findings"
+      ],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "trend-analyst",
+      "category": "research",
+      "description": "Analyzes emerging patterns, predicts industry shifts, develops future scenarios for strategic planning",
+      "domains": [],
+      "triggers": [
+        "trend",
+        "emerging",
+        "forecast",
+        "industry shift",
+        "future",
+        "strategic planning"
+      ],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "test-automator",
+      "category": "testing",
+      "description": "Builds automated test frameworks, creates test scripts, integrates testing into CI/CD",
+      "domains": [
+        "backend",
+        "frontend",
+        "devops"
+      ],
+      "triggers": [
+        "test",
+        "unit test",
+        "integration test",
+        "e2e",
+        "test coverage",
+        "spec",
+        "ci testing",
+        "automated tests"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    }
+  ]
+}

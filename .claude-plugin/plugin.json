@@ -1,0 +1,18 @@
+{
+  "name": "invokerai",
+  "description": "Agent routing brain for Claude Code. Takes a task, returns the right specialist agent and tools. Zero external API calls. Extracted from the LENA orchestrator.",
+  "author": {
+    "name": "Jamin Echols",
+    "url": "https://github.com/justjammin"
+  },
+  "homepage": "https://github.com/justjammin/invokerai",
+  "repository": "https://github.com/justjammin/invokerai",
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "routing",
+    "orchestration",
+    "classifier",
+    "productivity"
+  ]
+}

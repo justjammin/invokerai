@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Runtime data (lives in ~/.invokerai/, not repo)
+router.pkl
+routing_log.jsonl
+*.pkl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/

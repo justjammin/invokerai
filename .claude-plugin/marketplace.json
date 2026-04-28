@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "invokerai",
+  "description": "Agent routing brain — picks the right specialist for any task",
+  "owner": {
+    "name": "Jamin Echols",
+    "url": "https://github.com/justjammin"
+  },
+  "plugins": [
+    {
+      "name": "invokerai",
+      "description": "InvokerAI — deterministic + ML agent router. Given a task, returns role, routing, confidence, and tools. MIT open source.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

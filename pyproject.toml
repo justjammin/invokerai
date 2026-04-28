@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-invoker"
+version = "0.1.0"
+description = "Agent routing brain. Given a task, returns the right specialist agent and tools."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Jamin Echols"}]
+keywords = ["agents", "routing", "orchestration", "llm", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "scikit-learn>=1.4",
+]
+
+[project.optional-dependencies]
+embeddings = [
+    "sentence-transformers>=2.7",
+    "torch>=2.0",
+]
+dev = [
+    "pytest>=7",
+    "pytest-cov",
+]
+
+[project.scripts]
+invoker = "agent_invoker.cli:main"
+invoker-mcp = "agent_invoker.mcp_server:serve"
+
+[project.urls]
+Homepage = "https://github.com/justjammin/invokerai"
+Repository = "https://github.com/justjammin/invokerai"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_invoker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
