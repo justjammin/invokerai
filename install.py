@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -19,8 +20,37 @@ from pathlib import Path
 
 MIN_PYTHON = (3, 9)
 INVOKERAI_DIR = Path.home() / ".invokerai"
+VENV_DIR = INVOKERAI_DIR / "venv"
 CLAUDE_AGENTS_DIR = Path.home() / ".claude" / "agents"
 LOCAL_AGENTS_DIR = Path(__file__).parent / "agents"
+
+_IN_MANAGED_VENV = os.environ.get("_INVOKERAI_VENV") == "1"
+
+
+def bootstrap_venv() -> None:
+    """Re-exec inside ~/.invokerai/venv, creating it first if needed."""
+    in_venv = sys.prefix != sys.base_prefix or "VIRTUAL_ENV" in os.environ
+    if in_venv or _IN_MANAGED_VENV:
+        return
+
+    venv_python = VENV_DIR / "bin" / "python"
+    if not venv_python.exists():
+        print(f"  Venv:    creating {VENV_DIR} ...")
+        subprocess.run([sys.executable, "-m", "venv", str(VENV_DIR)], check=True)
+        answer = input("  Upgrade pip in venv to latest? [Y/n] ").strip().lower()
+        if answer in ("", "y", "yes"):
+            subprocess.run(
+                [str(venv_python), "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+                check=True,
+            )
+
+    env = os.environ.copy()
+    env["_INVOKERAI_VENV"] = "1"
+    env["VIRTUAL_ENV"] = str(VENV_DIR)
+    env["PATH"] = str(VENV_DIR / "bin") + os.pathsep + env.get("PATH", "")
+    env.pop("PYTHONHOME", None)
+
+    os.execve(str(venv_python), [str(venv_python)] + sys.argv, env)
 
 
 def check_python() -> None:
@@ -125,6 +155,8 @@ def main() -> None:
     parser.add_argument("--no-build", action="store_true", help="Skip router.pkl generation")
     parser.add_argument("--dev", action="store_true", help="Install in editable mode")
     args = parser.parse_args()
+
+    bootstrap_venv()
 
     print("Installing InvokerAI...")
     print()

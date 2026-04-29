@@ -10,16 +10,81 @@ Extracted from [LENA](https://github.com/justjammin/lena), the AI orchestrator f
 
 ## Install
 
+### npm (Mac / Linux / Windows)
+
+Requires Node 16+ and Python 3.9+.
+
 ```bash
+npm install -g invokerai-mcp
+```
+
+On first run the launcher creates `~/.invokerai/venv`, pip-installs `agent-invoker` from PyPI, then starts the MCP server. Subsequent runs skip setup entirely.
+
+Update the Python package without reinstalling the npm wrapper:
+
+```bash
+invoker-mcp --update
+```
+
+### Homebrew (Mac / Linux)
+
+```bash
+brew tap justjammin/invokerai
+brew install invokerai
+```
+
+Fully isolated — ships its own Python venv. No system Python changes.
+
+### From source
+
+```bash
+git clone https://github.com/justjammin/invokerai
+cd invokerai
 python install.py
 ```
 
-Or via pip (once published):
+Or pip (once published to PyPI):
 
 ```bash
 pip install agent-invoker
-python -m agent_invoker.build
 ```
+
+---
+
+## MCP server setup
+
+After installing via npm or Homebrew, add this to your editor's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "invokerai": {
+      "command": "invoker-mcp"
+    }
+  }
+}
+```
+
+Or run the automated setup to configure every editor at once:
+
+```bash
+invoker setup
+```
+
+For local development before publishing, point at the venv directly:
+
+```json
+{
+  "mcpServers": {
+    "invokerai": {
+      "command": "/Users/you/.invokerai/venv/bin/python",
+      "args": ["-m", "agent_invoker.mcp_server"]
+    }
+  }
+}
+```
+
+See [`DISTRIBUTION.md`](DISTRIBUTION.md) for the full PyPI → npm → Homebrew publish playbook.
 
 ---
 

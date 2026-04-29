@@ -55,6 +55,30 @@ def _mcp_entry(pkg_dir: Path) -> dict:
         return {"command": py, "args": [script]}
 
 
+_AGENT_HOOK_COMMAND = (
+    "echo '[InvokerAI] REQUIRED: call mcp__invokerai__route_task before spawning this agent.'"
+)
+_AGENT_HOOK_MATCHER = "Agent"
+
+
+def _inject_agent_hook(settings: dict) -> bool:
+    """Add PreToolUse hook on Agent tool. Returns True if settings were modified."""
+    hooks = settings.setdefault("hooks", {})
+    pre = hooks.setdefault("PreToolUse", [])
+
+    for entry in pre:
+        if entry.get("matcher") == _AGENT_HOOK_MATCHER:
+            for h in entry.get("hooks", []):
+                if _AGENT_HOOK_COMMAND in h.get("command", ""):
+                    return False  # already present
+
+    pre.append({
+        "matcher": _AGENT_HOOK_MATCHER,
+        "hooks": [{"type": "command", "command": _AGENT_HOOK_COMMAND}],
+    })
+    return True
+
+
 def setup_claude_code(pkg_dir: Path) -> bool:
     settings_path = Path.home() / ".claude" / "settings.json"
     if not settings_path.parent.exists():
@@ -68,6 +92,8 @@ def setup_claude_code(pkg_dir: Path) -> bool:
         except json.JSONDecodeError:
             settings = {}
 
+    changed = False
+
     if "mcpServers" not in settings:
         settings["mcpServers"] = {}
 
@@ -75,8 +101,17 @@ def setup_claude_code(pkg_dir: Path) -> bool:
         print("  Claude Code: MCP already registered (skipped)")
     else:
         settings["mcpServers"]["invokerai"] = _mcp_entry(pkg_dir)
-        settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+        changed = True
         print("  Claude Code: MCP registered → ~/.claude/settings.json")
+
+    if _inject_agent_hook(settings):
+        changed = True
+        print("  Claude Code: Agent hook registered → ~/.claude/settings.json")
+    else:
+        print("  Claude Code: Agent hook already registered (skipped)")
+
+    if changed:
+        settings_path.write_text(json.dumps(settings, indent=2) + "\n")
 
     return True
 

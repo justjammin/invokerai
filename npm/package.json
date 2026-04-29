@@ -1,0 +1,26 @@
+{
+  "name": "invokerai-mcp",
+  "version": "0.1.0",
+  "description": "InvokerAI MCP server — agent routing brain for Claude Code, Cursor, and Copilot",
+  "license": "MIT",
+  "author": "Jamin Echols",
+  "homepage": "https://github.com/justjammin/invokerai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justjammin/invokerai.git",
+    "directory": "npm"
+  },
+  "keywords": ["mcp", "claude", "agents", "routing", "llm", "ai"],
+  "engines": {
+    "node": ">=16"
+  },
+  "bin": {
+    "invoker-mcp": "bin/invoker-mcp.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "scripts": {
+    "prepublishOnly": "node bin/invoker-mcp.js --version"
+  }
+}
