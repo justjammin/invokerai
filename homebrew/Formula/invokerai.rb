@@ -60,8 +60,10 @@ class Invokerai < Formula
   def post_install
     # Pre-build router.pkl so first run is instant
     system libexec/"bin/python", "-m", "agent_invoker.cli", "--build-router"
+    # Auto-configure editors (Claude Code, Cursor, Copilot)
+    system libexec/"bin/python", "-m", "agent_invoker.setup_editors"
   rescue
-    opoo "router.pkl build skipped — regex fallback will be used on first run"
+    opoo "post-install setup skipped — run `invoker setup` manually"
   end
 
   test do

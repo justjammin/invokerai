@@ -64,7 +64,7 @@ function findPython() {
 function setupVenv(force = false) {
   const needsInstall = force || !fs.existsSync(VENV_PYTHON);
 
-  if (!needsInstall) return;
+  if (!needsInstall) return false;
 
   const python = findPython();
   if (!python) {
@@ -91,6 +91,7 @@ function setupVenv(force = false) {
 
   execFileSync(VENV_PIP, installArgs, { stdio: 'inherit' });
   process.stderr.write('InvokerAI: environment ready.\n');
+  return true;
 }
 
 // ---------- main -------------------------------------------------------------
@@ -105,7 +106,15 @@ if (args.includes('--version')) {
 const forceUpdate = args.includes('--update');
 const serverArgs = args.filter(a => a !== '--update');
 
-setupVenv(forceUpdate);
+const didInstall = setupVenv(forceUpdate);
+
+if (didInstall) {
+  try {
+    execFileSync(VENV_PYTHON, ['-m', 'agent_invoker.setup_editors'], { stdio: 'inherit' });
+  } catch (_) {
+    process.stderr.write('InvokerAI: editor auto-config failed — run `invoker setup` manually.\n');
+  }
+}
 
 // Exec the MCP server — stdio passes through so Claude Code / Cursor see it
 const child = spawn(VENV_PYTHON, ['-m', 'agent_invoker.mcp_server', ...serverArgs], {

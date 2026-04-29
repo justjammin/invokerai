@@ -60,9 +60,19 @@ _AGENT_HOOK_COMMAND = (
 )
 _AGENT_HOOK_MATCHER = "Agent"
 
+_SUBAGENT_HOOK_COMMAND = (
+    "echo '[InvokerAI] call mcp__invokerai__route_task(task) to confirm correct specialist.'"
+)
+_SUBAGENT_HOOK_MARKER = "confirm correct specialist"
+
+_PROMPT_HOOK_COMMAND = (
+    "echo '[InvokerAI] Route agent tasks: mcp__invokerai__route_task(task) → routing/role/tools.'"
+)
+_PROMPT_HOOK_MARKER = "mcp__invokerai__route_task"
+
 
 def _inject_agent_hook(settings: dict) -> bool:
-    """Add PreToolUse hook on Agent tool. Returns True if settings were modified."""
+    """Add PreToolUse[Agent] hook — fires in orchestrator before subagent spawns."""
     hooks = settings.setdefault("hooks", {})
     pre = hooks.setdefault("PreToolUse", [])
 
@@ -75,6 +85,38 @@ def _inject_agent_hook(settings: dict) -> bool:
     pre.append({
         "matcher": _AGENT_HOOK_MATCHER,
         "hooks": [{"type": "command", "command": _AGENT_HOOK_COMMAND}],
+    })
+    return True
+
+
+def _inject_subagent_hook(settings: dict) -> bool:
+    """Add SubagentStart hook — fires inside the spawned agent's own context."""
+    hooks = settings.setdefault("hooks", {})
+    subagent = hooks.setdefault("SubagentStart", [])
+
+    for entry in subagent:
+        for h in entry.get("hooks", []):
+            if _SUBAGENT_HOOK_MARKER in h.get("command", ""):
+                return False  # already present
+
+    subagent.append({
+        "hooks": [{"type": "command", "command": _SUBAGENT_HOOK_COMMAND}],
+    })
+    return True
+
+
+def _inject_prompt_hook(settings: dict) -> bool:
+    """Add UserPromptSubmit hook — stdout is injected into context, nudges MCP routing."""
+    hooks = settings.setdefault("hooks", {})
+    submit = hooks.setdefault("UserPromptSubmit", [])
+
+    for entry in submit:
+        for h in entry.get("hooks", []):
+            if _PROMPT_HOOK_MARKER in h.get("command", ""):
+                return False  # already present
+
+    submit.append({
+        "hooks": [{"type": "command", "command": _PROMPT_HOOK_COMMAND}],
     })
     return True
 
@@ -110,6 +152,18 @@ def setup_claude_code(pkg_dir: Path) -> bool:
     else:
         print("  Claude Code: Agent hook already registered (skipped)")
 
+    if _inject_subagent_hook(settings):
+        changed = True
+        print("  Claude Code: SubagentStart hook registered → ~/.claude/settings.json")
+    else:
+        print("  Claude Code: SubagentStart hook already registered (skipped)")
+
+    if _inject_prompt_hook(settings):
+        changed = True
+        print("  Claude Code: UserPromptSubmit hook registered → ~/.claude/settings.json")
+    else:
+        print("  Claude Code: UserPromptSubmit hook already registered (skipped)")
+
     if changed:
         settings_path.write_text(json.dumps(settings, indent=2) + "\n")
 
@@ -138,6 +192,65 @@ def setup_cursor(pkg_dir: Path) -> bool:
         config["mcpServers"]["invokerai"] = _mcp_entry(pkg_dir)
         cursor_mcp.write_text(json.dumps(config, indent=2) + "\n")
         print("  Cursor: MCP registered → ~/.cursor/mcp.json")
+
+    return True
+
+
+def setup_kiro(pkg_dir: Path) -> bool:
+    kiro_agents_dir = Path.home() / ".kiro" / "agents"
+    if not kiro_agents_dir.parent.exists():
+        print("  Kiro: not installed, skipping")
+        return False
+
+    kiro_agents_dir.mkdir(parents=True, exist_ok=True)
+    agent_file = kiro_agents_dir / "invokerai.json"
+
+    entry = _mcp_entry(pkg_dir)
+    config: dict = {
+        "name": "invokerai",
+        "description": "Agent routing brain — route tasks to optimal specialist via MCP",
+        "mcpServers": {},
+        "hooks": {},
+    }
+    if agent_file.exists():
+        try:
+            config = json.loads(agent_file.read_text())
+        except json.JSONDecodeError:
+            pass
+
+    changed = False
+
+    config.setdefault("mcpServers", {})
+    if "invokerai" in config["mcpServers"]:
+        print("  Kiro: MCP already registered (skipped)")
+    else:
+        config["mcpServers"]["invokerai"] = entry
+        changed = True
+        print("  Kiro: MCP registered → ~/.kiro/agents/invokerai.json")
+
+    config.setdefault("hooks", {})
+    hooks = config["hooks"]
+
+    if "agentSpawn" not in hooks:
+        hooks["agentSpawn"] = {
+            "command": _AGENT_HOOK_COMMAND,
+        }
+        changed = True
+        print("  Kiro: agentSpawn hook registered → ~/.kiro/agents/invokerai.json")
+    else:
+        print("  Kiro: agentSpawn hook already registered (skipped)")
+
+    if "userPromptSubmit" not in hooks:
+        hooks["userPromptSubmit"] = {
+            "command": _PROMPT_HOOK_COMMAND,
+        }
+        changed = True
+        print("  Kiro: userPromptSubmit hook registered → ~/.kiro/agents/invokerai.json")
+    else:
+        print("  Kiro: userPromptSubmit hook already registered (skipped)")
+
+    if changed:
+        agent_file.write_text(json.dumps(config, indent=2) + "\n")
 
     return True
 
@@ -225,6 +338,7 @@ def run(pkg_dir: Path | None = None) -> None:
     print()
     setup_claude_code(pkg_dir)
     setup_cursor(pkg_dir)
+    setup_kiro(pkg_dir)
     setup_copilot(pkg_dir)
     inject_claude_md()
     copy_skill(pkg_dir)
