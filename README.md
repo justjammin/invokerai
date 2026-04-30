@@ -40,6 +40,8 @@ Fully isolated — ships its own Python venv. No system Python changes.
 ```bash
 git clone https://github.com/justjammin/invokerai
 cd invokerai
+pip install -e .
+ invoker setup
 python install.py
 ```
 
@@ -73,18 +75,6 @@ invoker setup
 
 **Other editors:** add the same block to your editor's MCP config file.
 
-For local development before publishing, point at the venv directly:
-
-```json
-{
-  "mcpServers": {
-    "invokerai": {
-      "command": "/Users/you/.invokerai/venv/bin/python",
-      "args": ["-m", "agent_invoker.mcp_server"]
-    }
-  }
-}
-```
 
 See [`DISTRIBUTION.md`](DISTRIBUTION.md) for the full PyPI → npm → Homebrew publish playbook.
 

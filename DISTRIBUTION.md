@@ -1,17 +1,23 @@
 # InvokerAI Distribution Guide
 
-Two distribution channels. Both result in a single `invoker-mcp` binary in PATH.  
-MCP config is identical everywhere:
+Three distribution channels. `invoker setup` detects which one you used and writes
+the correct MCP config automatically — you never need to edit it by hand.
 
-```json
-{
-  "mcpServers": {
-    "invokerai": {
-      "command": "invoker-mcp"
-    }
-  }
-}
-```
+## How setup detects your install
+
+`invoker setup` runs `_mcp_entry()` in this priority order:
+
+| Priority | Install method | Config written |
+|----------|---------------|----------------|
+| 1 | **Homebrew** | `{"command": "/opt/homebrew/bin/invoker-mcp"}` — absolute path, immune to PATH changes |
+| 2 | **npm** (nvm / fnm / volta / system) | `{"command": "/absolute/path/to/invoker-mcp"}` — searched across all node version managers |
+| 3 | **invoker-mcp on current PATH** | `{"command": "invoker-mcp"}` — only if already resolvable |
+| 4 | **From source / pip editable** | `{"command": "/path/to/python", "args": ["-m", "agent_invoker.mcp_server"]}` |
+
+> **Why absolute paths matter:** npm installs are tied to the active Node version.
+> If you use nvm and switch versions — or if Claude Code starts with a different PATH
+> than your shell — `invoker-mcp` becomes invisible. Using the absolute path bypasses
+> this entirely. Homebrew and the Python fallback are always stable regardless of shell state.
 
 ---
 

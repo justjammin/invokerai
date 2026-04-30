@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -36,14 +37,83 @@ mcp__invokerai__route_task(task: str, custom_registry?: str)
 <!-- INVOKERAI-END -->"""
 
 
-def _python_cmd() -> str:
-    return sys.executable
+def _homebrew_bin() -> Path | None:
+    """Find invoker-mcp installed via Homebrew (absolute path, immune to PATH changes)."""
+    for prefix in ["/opt/homebrew", "/usr/local", "/home/linuxbrew/.linuxbrew"]:
+        p = Path(prefix) / "bin" / "invoker-mcp"
+        if p.exists():
+            return p
+    try:
+        result = subprocess.run(
+            ["brew", "--prefix"], capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            p = Path(result.stdout.strip()) / "bin" / "invoker-mcp"
+            if p.exists():
+                return p
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
+def _npm_bin() -> Path | None:
+    """Find invoker-mcp across nvm / fnm / volta / system npm global bins."""
+    # nvm — search all installed node versions, newest first
+    nvm_dir = Path(os.environ.get("NVM_DIR", Path.home() / ".nvm"))
+    if nvm_dir.exists():
+        node_versions = sorted(
+            (nvm_dir / "versions" / "node").glob("v*"), reverse=True
+        )
+        for node_dir in node_versions:
+            candidate = node_dir / "bin" / "invoker-mcp"
+            if candidate.exists():
+                return candidate
+
+    # fnm
+    fnm_dir = Path.home() / ".fnm" / "node-versions"
+    if fnm_dir.exists():
+        for node_dir in sorted(fnm_dir.glob("v*"), reverse=True):
+            candidate = node_dir / "installation" / "bin" / "invoker-mcp"
+            if candidate.exists():
+                return candidate
+
+    # volta
+    volta_bin = Path.home() / ".volta" / "bin" / "invoker-mcp"
+    if volta_bin.exists():
+        return volta_bin
+
+    # system npm global
+    try:
+        result = subprocess.run(
+            ["npm", "root", "-g"], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            candidate = Path(result.stdout.strip()).parent / "bin" / "invoker-mcp"
+            if candidate.exists():
+                return candidate
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    return None
 
 
 def _mcp_entry(pkg_dir: Path) -> dict:
-    py = _python_cmd()
-    # Prefer module invocation (works after pip install)
-    # Fall back to direct script path if package not installed
+    # 1. Homebrew — compiled binary, absolute path, never breaks on PATH changes
+    brew_bin = _homebrew_bin()
+    if brew_bin:
+        return {"command": str(brew_bin)}
+
+    # 2. npm (nvm / fnm / volta / system) — absolute path avoids active-version mismatch
+    npm_bin = _npm_bin()
+    if npm_bin:
+        return {"command": str(npm_bin)}
+
+    # 3. invoker-mcp already on current PATH
+    if shutil.which("invoker-mcp"):
+        return {"command": "invoker-mcp"}
+
+    # 4. Fall back to the Python that's running this setup
+    py = sys.executable
     try:
         subprocess.run(
             [py, "-c", "import agent_invoker"],
@@ -53,6 +123,15 @@ def _mcp_entry(pkg_dir: Path) -> dict:
     except subprocess.CalledProcessError:
         script = str(pkg_dir / "agent_invoker" / "mcp_server.py")
         return {"command": py, "args": [script]}
+
+
+def _clear_pycache(pkg_dir: Path) -> None:
+    import os
+    for root, dirs, files in os.walk(pkg_dir / "agent_invoker"):
+        if "__pycache__" in dirs:
+            cache = Path(root) / "__pycache__"
+            for f in cache.glob("*.pyc"):
+                f.unlink(missing_ok=True)
 
 
 _AGENT_HOOK_COMMAND = (
@@ -141,10 +220,11 @@ def setup_claude_code(pkg_dir: Path) -> bool:
 
     mcp_changed = False
     claude_json.setdefault("mcpServers", {})
-    if "invokerai" in claude_json["mcpServers"]:
-        print("  Claude Code: MCP already registered (skipped)")
+    new_entry = _mcp_entry(pkg_dir)
+    if claude_json["mcpServers"].get("invokerai") == new_entry:
+        print("  Claude Code: MCP already up to date (skipped)")
     else:
-        claude_json["mcpServers"]["invokerai"] = _mcp_entry(pkg_dir)
+        claude_json["mcpServers"]["invokerai"] = new_entry
         mcp_changed = True
         print("  Claude Code: MCP registered → ~/.claude.json")
 
@@ -349,6 +429,7 @@ def run(pkg_dir: Path | None = None) -> None:
     if pkg_dir is None:
         pkg_dir = Path(__file__).parent.parent
 
+    _clear_pycache(pkg_dir)
     print("Configuring InvokerAI for editors...")
     print()
     setup_claude_code(pkg_dir)
