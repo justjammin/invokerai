@@ -53,7 +53,13 @@ pip install agent-invoker
 
 ## MCP server setup
 
-After installing via npm or Homebrew, add this to your editor's MCP config:
+Run the automated setup to configure every editor at once:
+
+```bash
+invoker setup
+```
+
+**Claude Code:** add to `~/.claude.json` (not `~/.claude/settings.json`):
 
 ```json
 {
@@ -65,11 +71,7 @@ After installing via npm or Homebrew, add this to your editor's MCP config:
 }
 ```
 
-Or run the automated setup to configure every editor at once:
-
-```bash
-invoker setup
-```
+**Other editors:** add the same block to your editor's MCP config file.
 
 For local development before publishing, point at the venv directly:
 

@@ -122,11 +122,36 @@ def _inject_prompt_hook(settings: dict) -> bool:
 
 
 def setup_claude_code(pkg_dir: Path) -> bool:
+    # MCP servers → ~/.claude.json (Claude Code's primary config)
+    # Hooks → ~/.claude/settings.json (user settings layer)
+    claude_json_path = Path.home() / ".claude.json"
     settings_path = Path.home() / ".claude" / "settings.json"
+
     if not settings_path.parent.exists():
         print("  Claude Code: not installed, skipping")
         return False
 
+    # Register MCP in ~/.claude.json
+    claude_json: dict = {}
+    if claude_json_path.exists():
+        try:
+            claude_json = json.loads(claude_json_path.read_text())
+        except json.JSONDecodeError:
+            claude_json = {}
+
+    mcp_changed = False
+    claude_json.setdefault("mcpServers", {})
+    if "invokerai" in claude_json["mcpServers"]:
+        print("  Claude Code: MCP already registered (skipped)")
+    else:
+        claude_json["mcpServers"]["invokerai"] = _mcp_entry(pkg_dir)
+        mcp_changed = True
+        print("  Claude Code: MCP registered → ~/.claude.json")
+
+    if mcp_changed:
+        claude_json_path.write_text(json.dumps(claude_json, indent=2) + "\n")
+
+    # Register hooks in ~/.claude/settings.json
     settings: dict = {}
     if settings_path.exists():
         try:
@@ -134,37 +159,27 @@ def setup_claude_code(pkg_dir: Path) -> bool:
         except json.JSONDecodeError:
             settings = {}
 
-    changed = False
-
-    if "mcpServers" not in settings:
-        settings["mcpServers"] = {}
-
-    if "invokerai" in settings["mcpServers"]:
-        print("  Claude Code: MCP already registered (skipped)")
-    else:
-        settings["mcpServers"]["invokerai"] = _mcp_entry(pkg_dir)
-        changed = True
-        print("  Claude Code: MCP registered → ~/.claude/settings.json")
+    hooks_changed = False
 
     if _inject_agent_hook(settings):
-        changed = True
+        hooks_changed = True
         print("  Claude Code: Agent hook registered → ~/.claude/settings.json")
     else:
         print("  Claude Code: Agent hook already registered (skipped)")
 
     if _inject_subagent_hook(settings):
-        changed = True
+        hooks_changed = True
         print("  Claude Code: SubagentStart hook registered → ~/.claude/settings.json")
     else:
         print("  Claude Code: SubagentStart hook already registered (skipped)")
 
     if _inject_prompt_hook(settings):
-        changed = True
+        hooks_changed = True
         print("  Claude Code: UserPromptSubmit hook registered → ~/.claude/settings.json")
     else:
         print("  Claude Code: UserPromptSubmit hook already registered (skipped)")
 
-    if changed:
+    if hooks_changed:
         settings_path.write_text(json.dumps(settings, indent=2) + "\n")
 
     return True
