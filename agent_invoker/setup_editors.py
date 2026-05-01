@@ -51,10 +51,13 @@ TOKEN_TTL=30
 
 # Token gate: spawn_specialist wrote this token — allow the Agent call
 if [ -f "$TOKEN" ]; then
-    TOKEN_AGE=$(( $(date +%s) - $(cat "$TOKEN" 2>/dev/null || echo 0) ))
+    TOKEN_TS=$(cat "$TOKEN" 2>/dev/null)
     rm -f "$TOKEN"
-    if [ "$TOKEN_AGE" -lt "$TOKEN_TTL" ]; then
-        exit 0
+    if [[ "$TOKEN_TS" =~ ^[0-9]+$ ]]; then
+        TOKEN_AGE=$(( $(date +%s) - TOKEN_TS ))
+        if [ "$TOKEN_AGE" -lt "$TOKEN_TTL" ]; then
+            exit 0
+        fi
     fi
 fi
 
@@ -426,11 +429,11 @@ def setup_copilot(pkg_dir: Path) -> bool:
         print("  GitHub Copilot: MCP already registered (skipped)")
     else:
         entry = _mcp_entry(pkg_dir)
-        config["servers"]["invokerai"] = {
-            "command": entry["command"],
-            "args": entry["args"],
-            "type": "stdio",
-        }
+        server_entry: dict = {"command": entry["command"], "type": "stdio"}
+        args = entry.get("args", [])
+        if args:
+            server_entry["args"] = args
+        config["servers"]["invokerai"] = server_entry
         cwd_mcp.write_text(json.dumps(config, indent=2) + "\n")
         print(f"  GitHub Copilot: MCP registered → {cwd_mcp}")
 
@@ -450,11 +453,12 @@ def inject_claude_md() -> bool:
 
     content = claude_md.read_text()
     if CLAUDE_MD_MARKER_START in content:
-        # Replace existing node
+        # Replace existing node.  Use a lambda replacement so re.sub never
+        # interprets backslash sequences in CLAUDE_MD_NODE (e.g. \n, \1).
         import re
         updated = re.sub(
             rf"{re.escape(CLAUDE_MD_MARKER_START)}.*?{re.escape(CLAUDE_MD_MARKER_END)}",
-            CLAUDE_MD_NODE,
+            lambda _m: CLAUDE_MD_NODE,
             content,
             flags=re.DOTALL,
         )

@@ -14,11 +14,20 @@ _AGENTS_DIR = Path.home() / ".claude" / "agents"
 
 
 def _load_persona(role: str) -> dict:
-    """Read persona from ~/.claude/agents/{role}.md — body after frontmatter is system_prompt_fragment."""
+    """Read persona from ~/.claude/agents/{role}.md — body after frontmatter is system_prompt_fragment.
+
+    Falls back to the repo's agents/ directory when the user-installed file is missing
+    (e.g. during development before 'invoker setup' has been run).
+    """
     agent_file = _AGENTS_DIR / f"{role}.md"
     if not agent_file.exists():
-        return {"resource_uri": f"agent://{role}"}
-    content = agent_file.read_text()
+        # Dev fallback: agents/ directory at repo root (sibling of agent_invoker/)
+        repo_agents = Path(__file__).parent.parent / "agents" / f"{role}.md"
+        if repo_agents.exists():
+            agent_file = repo_agents
+        else:
+            return {"resource_uri": f"agent://{role}"}
+    content = agent_file.read_text(encoding="utf-8")
     body = content
     if content.startswith("---"):
         end = content.find("\n---", 3)
@@ -136,9 +145,13 @@ def _regex_score(task: str, registry: dict[str, Agent]) -> dict:
 
     net = orchestrate_score - direct_score
     total = direct_score + orchestrate_score
-    confidence = round(abs(net) / total * 100) if total > 0 else 0
-
-    routing = "orchestrate" if net >= 0 else "direct"
+    # Tied (net==0) → bias direct, report 50% so confidence<50 rule doesn't trigger
+    if net == 0:
+        routing = "direct"
+        confidence = 50
+    else:
+        routing = "orchestrate" if net > 0 else "direct"
+        confidence = round(abs(net) / total * 100) if total > 0 else 0
     role = _suggest_role(t, imp_verbs, registry) if routing == "direct" else None
 
     return {
@@ -234,7 +247,8 @@ def _log(task: str, result: RoutingResult) -> None:
                 "confidence": result.confidence,
                 "source": result.source,
             }) + "\n")
-        count = sum(1 for _ in LOG_PATH.open())
+        with LOG_PATH.open() as fh:
+            count = sum(1 for _ in fh)
         if count == PHASE2_MILESTONE:
             print(
                 f"\n[invokerai] {PHASE2_MILESTONE} routing decisions logged — ready for Phase 2.\n"

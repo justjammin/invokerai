@@ -36,27 +36,6 @@ _OLD_CLAUDE_MD_MARKER_END = "<!-- INVOKERAI-END -->"
 
 # ── load current setup_editors state ─────────────────────────────────────────
 
-def _load_setup():
-    pkg_dir = Path(__file__).parent
-    sys.path.insert(0, str(pkg_dir))
-    from agent_invoker.setup_editors import (
-        _mcp_entry,
-        _install_hook_script,
-        _inject_agent_hook,
-        _inject_subagent_hook,
-        _inject_prompt_hook,
-        inject_claude_md,
-        CLAUDE_MD_NODE,
-        _HOOK_SCRIPT_PATH,
-        _AGENT_HOOK_COMMAND,
-        _AGENT_HOOK_MARKER,
-        _SUBAGENT_HOOK_COMMAND,
-        _SUBAGENT_HOOK_MARKER,
-        _PROMPT_HOOK_COMMAND,
-        _PROMPT_HOOK_MARKER,
-    )
-    return locals()
-
 
 # ── hook purge helpers ────────────────────────────────────────────────────────
 

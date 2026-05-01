@@ -68,9 +68,15 @@ def _agent_resources() -> list[dict]:
 def _read_agent_resource(uri: str) -> str:
     role = uri.removeprefix("agent://")
     agent_file = _AGENTS_DIR / f"{role}.md"
+    # Guard path traversal — role is user-supplied
+    try:
+        if not agent_file.resolve().is_relative_to(_AGENTS_DIR.resolve()):
+            return "Access denied"
+    except ValueError:
+        return "Access denied"
     if not agent_file.exists():
         return f"Agent profile not found: {role}"
-    return agent_file.read_text()
+    return agent_file.read_text(encoding="utf-8")
 
 
 # ── tool schemas ──────────────────────────────────────────────────────────────
@@ -206,7 +212,13 @@ def _handle_spawn_specialist(args: dict, id: Any) -> None:
         # Write spawn token — PreToolUse[Agent] hook consumes this to allow the next Agent call
         _SPAWN_TOKEN.parent.mkdir(parents=True, exist_ok=True)
         _SPAWN_TOKEN.write_text(str(int(time.time())))
-        _respond(id, {"content": [{"type": "text", "text": json.dumps(_route_output(result, session_id, authorized=True), indent=2)}]})
+        out = _route_output(result, session_id, authorized=True)
+        if result.routing == "orchestrate":
+            out["orchestrate_guidance"] = (
+                "Task spans multiple domains. Spawn multiple specialists sequentially. "
+                "Use route_task for each sub-task to get the right role."
+            )
+        _respond(id, {"content": [{"type": "text", "text": json.dumps(out, indent=2)}]})
     except Exception as e:
         _error(id, -32603, str(e))
 
@@ -239,7 +251,10 @@ def _handle_confirm_route(args: dict, id: Any) -> None:
 def _handle_list_agents(args: dict, id: Any) -> None:
     try:
         from agent_invoker.registry.loader import load_registry
-        registry = load_registry()
+        try:
+            registry = load_registry()
+        except Exception:
+            registry = {}
         category_filter = (args.get("category") or "").lower()
         agents = [
             {
@@ -263,7 +278,7 @@ def _handle_list_agents(args: dict, id: Any) -> None:
 def _handle(req: dict) -> None:
     id = req.get("id")
     method = req.get("method", "")
-    params = req.get("params", {})
+    params = req.get("params") or {}
 
     if method == "initialize":
         _respond(id, {
