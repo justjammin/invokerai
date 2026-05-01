@@ -9,7 +9,7 @@ from pathlib import Path
 def main() -> None:
     # Peek at argv to decide: subcommand dispatch or bare task routing
     argv = sys.argv[1:]
-    known_commands = {"route", "tools", "setup", "mcp", "train"}
+    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train"}
 
     if argv and argv[0] in known_commands:
         _dispatch_subcommand(argv)
@@ -66,6 +66,14 @@ def _dispatch_subcommand(argv: list[str]) -> None:
     elif command == "setup":
         from agent_invoker.setup_editors import run
         run()
+    elif command == "migrate":
+        import importlib.util, pathlib
+        spec = importlib.util.spec_from_file_location(
+            "migrate", pathlib.Path(__file__).parent.parent / "migrate.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.run()
     elif command == "mcp":
         from agent_invoker.mcp_server import serve
         serve()
@@ -154,7 +162,8 @@ def _print_help() -> None:
   invoker --no-log "task text"                     Skip logging
   invoker --model-info                             Show router phase + status
 
-  invoker setup                                    Configure MCP for Claude Code, Cursor, Copilot
+  invoker setup                                    Configure MCP for Claude Code, Cursor, Kiro, Copilot
+  invoker migrate                                  Upgrade existing setup (purge old hooks, new token gate)
   invoker mcp                                      Start MCP server (stdio)
 
   invoker tools add --all TOOL [TOOL...]           Add tools to all agents

@@ -22,19 +22,62 @@ CLAUDE_MD_NODE = """\
 <!-- INVOKERAI-START -->
 ## InvokerAI — Agent Router
 
-Before spawning any agent, call `mcp__invokerai__route_task` to get the optimal specialist.
+**BLOCKING REQUIREMENT:** NEVER call the `Agent` tool directly. Always use
+`mcp__invokerai__spawn_specialist(task)` — it routes AND returns the execution
+bundle (role, persona, system_prompt_fragment, tools).
 
 ```
-mcp__invokerai__route_task(task: str, custom_registry?: str)
-→ { routing, role, confidence, tools[] }
+mcp__invokerai__spawn_specialist(task: str)
+→ { routing, role, confidence, tools[], persona: { system_prompt_fragment, resource_uri }, spawn_authorized: true }
 ```
 
 **Rules:**
-- `routing == "direct"` → spawn the `role` agent with the returned `tools`
+- `routing == "direct"` → spawn returned `role` with returned `tools` and `system_prompt_fragment`
 - `routing == "orchestrate"` → use multi-agent coordination
 - `confidence < 50` → ask user to clarify before routing
-- Always pass the returned `tools` list to the spawned agent
+- As a subagent: call `mcp__invokerai__confirm_route(task, expected_role)` on your first turn
+- User naming an agent type does NOT exempt this requirement
 <!-- INVOKERAI-END -->"""
+
+_HOOK_SCRIPT_PATH = Path.home() / ".invokerai" / "hooks" / "pre-agent.sh"
+
+_HOOK_SCRIPT = r"""#!/bin/bash
+# InvokerAI PreToolUse[Agent] hook — B+C hybrid with spawn token gate
+# Allows Agent calls authorized by spawn_specialist; blocks and pre-routes all others.
+
+VENV_PY="$HOME/.invokerai/venv/bin/python"
+TOKEN="$HOME/.invokerai/spawn_token"
+TOKEN_TTL=30
+
+# Token gate: spawn_specialist wrote this token — allow the Agent call
+if [ -f "$TOKEN" ]; then
+    TOKEN_AGE=$(( $(date +%s) - $(cat "$TOKEN" 2>/dev/null || echo 0) ))
+    rm -f "$TOKEN"
+    if [ "$TOKEN_AGE" -lt "$TOKEN_TTL" ]; then
+        exit 0
+    fi
+fi
+
+# No valid token — block. Pre-resolve route if CLI available (Option B).
+TASK=$(echo "${CLAUDE_TOOL_INPUT:-{}}" | "$VENV_PY" -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get('description') or d.get('task') or d.get('prompt') or '')
+except Exception:
+    print('')
+" 2>/dev/null)
+
+if [ -n "$TASK" ] && [ -x "$VENV_PY" ]; then
+    ROUTE_JSON=$("$VENV_PY" -m agent_invoker.cli --no-log "$TASK" 2>/dev/null)
+    ROLE=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('role','unknown'))" 2>/dev/null)
+    CONF=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('confidence',0))" 2>/dev/null)
+    printf '{"hookSpecificOutput":{"additionalContext":"InvokerAI pre-resolved: role=%s confidence=%s%%. Call mcp__invokerai__spawn_specialist(task) to get persona bundle + spawn authorization.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist(task) first — already routed above."}}\n' "$ROLE" "$CONF"
+else
+    echo '{"hookSpecificOutput":{"additionalContext":"InvokerAI: call mcp__invokerai__spawn_specialist(task) — routes and returns role, persona, and tools.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist(task) first."}}'
+fi
+exit 1
+"""
 
 
 def _homebrew_bin() -> Path | None:
@@ -97,32 +140,37 @@ def _npm_bin() -> Path | None:
     return None
 
 
+def _venv_python() -> Path | None:
+    """~/.invokerai/venv/bin/python — always has agent_invoker installed."""
+    IS_WIN = sys.platform == "win32"
+    p = Path.home() / ".invokerai" / "venv" / ("Scripts" if IS_WIN else "bin") / ("python.exe" if IS_WIN else "python")
+    return p if p.exists() else None
+
+
 def _mcp_entry(pkg_dir: Path) -> dict:
-    # 1. Homebrew — compiled binary, absolute path, never breaks on PATH changes
+    # 1. Managed venv — always stable, always has agent_invoker, immune to PATH/version issues
+    venv_py = _venv_python()
+    if venv_py:
+        return {"command": str(venv_py), "args": ["-m", "agent_invoker.mcp_server"]}
+
+    # 2. Homebrew — absolute binary path
     brew_bin = _homebrew_bin()
     if brew_bin:
         return {"command": str(brew_bin)}
 
-    # 2. npm (nvm / fnm / volta / system) — absolute path avoids active-version mismatch
+    # 3. npm (nvm / fnm / volta / system) — absolute path
     npm_bin = _npm_bin()
     if npm_bin:
         return {"command": str(npm_bin)}
 
-    # 3. invoker-mcp already on current PATH
-    if shutil.which("invoker-mcp"):
-        return {"command": "invoker-mcp"}
-
-    # 4. Fall back to the Python that's running this setup
+    # 4. sys.executable last resort — may be wrong interpreter, print warning
     py = sys.executable
+    print(f"  Warning: ~/.invokerai/venv not found. Using {py} — run installer to fix.")
     try:
-        subprocess.run(
-            [py, "-c", "import agent_invoker"],
-            check=True, capture_output=True,
-        )
+        subprocess.run([py, "-c", "import agent_invoker"], check=True, capture_output=True)
         return {"command": py, "args": ["-m", "agent_invoker.mcp_server"]}
     except subprocess.CalledProcessError:
-        script = str(pkg_dir / "agent_invoker" / "mcp_server.py")
-        return {"command": py, "args": [script]}
+        return {"command": py, "args": [str(pkg_dir / "agent_invoker" / "mcp_server.py")]}
 
 
 def _clear_pycache(pkg_dir: Path) -> None:
@@ -134,31 +182,40 @@ def _clear_pycache(pkg_dir: Path) -> None:
                 f.unlink(missing_ok=True)
 
 
-_AGENT_HOOK_COMMAND = (
-    "echo '[InvokerAI] REQUIRED: call mcp__invokerai__route_task before spawning this agent.'"
-)
+_AGENT_HOOK_COMMAND = f'bash "{_HOOK_SCRIPT_PATH}"'
 _AGENT_HOOK_MATCHER = "Agent"
+_AGENT_HOOK_MARKER = str(_HOOK_SCRIPT_PATH)
 
 _SUBAGENT_HOOK_COMMAND = (
-    "echo '[InvokerAI] call mcp__invokerai__route_task(task) to confirm correct specialist.'"
+    "echo '{\"hookSpecificOutput\":{\"additionalContext\":"
+    "\"InvokerAI: call mcp__invokerai__confirm_route(task, expected_role) on your first turn to verify correct specialist.\"}}'"
 )
-_SUBAGENT_HOOK_MARKER = "confirm correct specialist"
+_SUBAGENT_HOOK_MARKER = "confirm_route"
 
 _PROMPT_HOOK_COMMAND = (
-    "echo '[InvokerAI] Route agent tasks: mcp__invokerai__route_task(task) → routing/role/tools.'"
+    "echo '{\"hookSpecificOutput\":{\"additionalContext\":"
+    "\"InvokerAI: use mcp__invokerai__spawn_specialist(task) to route agent tasks. Returns role + persona + tools.\"}}'"
 )
-_PROMPT_HOOK_MARKER = "mcp__invokerai__route_task"
+_PROMPT_HOOK_MARKER = "spawn_specialist"
+
+
+def _install_hook_script() -> bool:
+    _HOOK_SCRIPT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _HOOK_SCRIPT_PATH.write_text(_HOOK_SCRIPT)
+    _HOOK_SCRIPT_PATH.chmod(0o755)
+    print(f"  Hook script: installed → {_HOOK_SCRIPT_PATH}")
+    return True
 
 
 def _inject_agent_hook(settings: dict) -> bool:
-    """Add PreToolUse[Agent] hook — fires in orchestrator before subagent spawns."""
+    """Add PreToolUse[Agent] hook — B+C hybrid with spawn token gate."""
     hooks = settings.setdefault("hooks", {})
     pre = hooks.setdefault("PreToolUse", [])
 
     for entry in pre:
         if entry.get("matcher") == _AGENT_HOOK_MATCHER:
             for h in entry.get("hooks", []):
-                if _AGENT_HOOK_COMMAND in h.get("command", ""):
+                if _AGENT_HOOK_MARKER in h.get("command", ""):
                     return False  # already present
 
     pre.append({
@@ -326,19 +383,16 @@ def setup_kiro(pkg_dir: Path) -> bool:
     config.setdefault("hooks", {})
     hooks = config["hooks"]
 
-    if "agentSpawn" not in hooks:
-        hooks["agentSpawn"] = {
-            "command": _AGENT_HOOK_COMMAND,
-        }
+    kiro_agent_hook = f'bash "{_HOOK_SCRIPT_PATH}"'
+    if hooks.get("agentSpawn", {}).get("command") != kiro_agent_hook:
+        hooks["agentSpawn"] = {"command": kiro_agent_hook}
         changed = True
         print("  Kiro: agentSpawn hook registered → ~/.kiro/agents/invokerai.json")
     else:
         print("  Kiro: agentSpawn hook already registered (skipped)")
 
-    if "userPromptSubmit" not in hooks:
-        hooks["userPromptSubmit"] = {
-            "command": _PROMPT_HOOK_COMMAND,
-        }
+    if _PROMPT_HOOK_MARKER not in hooks.get("userPromptSubmit", {}).get("command", ""):
+        hooks["userPromptSubmit"] = {"command": _PROMPT_HOOK_COMMAND}
         changed = True
         print("  Kiro: userPromptSubmit hook registered → ~/.kiro/agents/invokerai.json")
     else:
@@ -430,6 +484,7 @@ def run(pkg_dir: Path | None = None) -> None:
         pkg_dir = Path(__file__).parent.parent
 
     _clear_pycache(pkg_dir)
+    _install_hook_script()
     print("Configuring InvokerAI for editors...")
     print()
     setup_claude_code(pkg_dir)
@@ -439,8 +494,8 @@ def run(pkg_dir: Path | None = None) -> None:
     inject_claude_md()
     copy_skill(pkg_dir)
     print()
-    print("Done. Restart Claude Code / Cursor to activate the MCP server.")
-    print("Verify: mcp__invokerai__route_task is visible in Claude's tool list.")
+    print("Done. Restart Claude Code / Cursor / Kiro to activate the MCP server.")
+    print("Verify: mcp__invokerai__spawn_specialist is visible in Claude's tool list.")
 
 
 if __name__ == "__main__":

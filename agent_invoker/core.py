@@ -10,6 +10,24 @@ from agent_invoker.registry.loader import load_registry, Agent
 from agent_invoker import classifier
 
 LOG_PATH = Path.home() / ".invokerai" / "routing_log.jsonl"
+_AGENTS_DIR = Path.home() / ".claude" / "agents"
+
+
+def _load_persona(role: str) -> dict:
+    """Read persona from ~/.claude/agents/{role}.md — body after frontmatter is system_prompt_fragment."""
+    agent_file = _AGENTS_DIR / f"{role}.md"
+    if not agent_file.exists():
+        return {"resource_uri": f"agent://{role}"}
+    content = agent_file.read_text()
+    body = content
+    if content.startswith("---"):
+        end = content.find("\n---", 3)
+        if end != -1:
+            body = content[end + 4:].strip()
+    return {
+        "resource_uri": f"agent://{role}",
+        "system_prompt_fragment": body[:2000],
+    }
 
 
 @dataclass
@@ -20,6 +38,7 @@ class RoutingResult:
     tools: list[str]
     source: str = "regex"
     agent: Agent | None = field(default=None, repr=False)
+    persona: dict = field(default_factory=dict)
 
 
 def route(
@@ -39,13 +58,15 @@ def route(
     agent = registry.get(result.get("suggested_role") or "")
     tools = agent.tools if agent else []
 
+    role = result.get("suggested_role")
     routing_result = RoutingResult(
         routing=result["routing"],
-        role=result.get("suggested_role"),
+        role=role,
         confidence=result["confidence"],
         tools=tools,
         source=result.get("source", "regex"),
         agent=agent,
+        persona=_load_persona(role) if role else {},
     )
 
     if log:
