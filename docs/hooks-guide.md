@@ -1,15 +1,17 @@
 # InvokerAI Hooks Setup & Enforcement Guide
 
-Complete guide to installing, configuring, and troubleshooting InvokerAI hooks across Claude Code, Cursor, Kiro, and GitHub Copilot.
+Setup, configuration, and troubleshooting for InvokerAI hooks across Claude Code, Cursor, Kiro, and GitHub Copilot.
 
 ## Overview
 
+Here's the thing about AI hook enforcement — most implementations are theater. Echo hooks fire, Claude reads the text, and then does whatever it was going to do anyway. I went through a few iterations on this before landing on something that actually works.
+
 InvokerAI uses a **B+C hybrid** enforcement mechanism:
 
-- **B**: `hookSpecificOutput` JSON with `permissionDecision: deny` — blocks raw Agent calls
-- **C**: `spawn_token` gate — allows Agent calls authorized by `spawn_specialist`
+- **B**: `hookSpecificOutput` JSON with `permissionDecision: deny` — blocks raw Agent calls at the platform level
+- **C**: `spawn_token` gate — the only way to get a token is to call `spawn_specialist` first
 
-Together, these ensure agents always route through InvokerAI before spawning, without breaking `spawn_specialist` → Agent flows.
+Together, these ensure agents always route through InvokerAI before spawning, without breaking the `spawn_specialist` → Agent flow that legitimate calls use. If you called `spawn_specialist`, the token's there and the Agent call goes through. If you didn't, it doesn't. That's it.
 
 ---
 
@@ -48,6 +50,8 @@ This single command:
 ## How Enforcement Works
 
 ### The spawn token mechanism
+
+No seriously, this is the part that makes it click. The token is proof you called `spawn_specialist` — and the hook checks for it every single time an Agent call is attempted.
 
 ```
 User calls spawn_specialist(task)
@@ -97,6 +101,8 @@ cat ~/.invokerai/hooks/pre-agent.sh
 ---
 
 ## Platform-Specific Setup
+
+Claude Code gets the full treatment. Kiro gets the same token pattern via its own hook events. Cursor and Copilot don't have hook systems, so enforcement there is through the inversion pattern — `spawn_specialist` returns the execution bundle agents need, so they call it because they *want* to, not because they're blocked otherwise.
 
 ### Claude Code (Full enforcement)
 

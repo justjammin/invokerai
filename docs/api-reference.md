@@ -1,17 +1,19 @@
 # InvokerAI MCP API Reference
 
-Complete reference for InvokerAI v0.2.0 MCP server tools, resources, and prompts.
+Full reference for InvokerAI v0.2.0 — four tools, two read-only, one that actually gates spawning, and one for discovery. If you only read one section, make it `spawn_specialist`.
 
 ## Overview
 
-InvokerAI exposes a four-tool suite for task routing and specialist agent discovery. All tools communicate via JSON-RPC 2.0 over stdio.
+Four tools over JSON-RPC 2.0 stdio. That's the whole server. No HTTP, no auth, no config. It starts when your editor starts it and answers every call in milliseconds from a local classifier.
 
-**Quick start:**
+**The 10-second version:**
 ```json
 { "task": "fix the authentication bug in the login endpoint" }
 → spawn_specialist(...)
 → { "routing": "direct", "role": "backend-developer", "confidence": 87, ... }
 ```
+
+One call. You get the role, the system prompt fragment, the tool list, and a spawn token that authorizes the next Agent call. That's it.
 
 Server connection:
 - **Entry:** `~/.invokerai/venv/bin/python -m agent_invoker.mcp_server`
@@ -24,7 +26,7 @@ Server connection:
 
 ### `spawn_specialist` — PRIMARY SURFACE
 
-Route a task and return the execution-ready bundle. This is the main entry point — agents should always call this instead of spawning the Agent tool directly.
+This is the one. Route a task, write the spawn token, return the execution bundle — all in one call. Agents should always hit this instead of going straight to the Agent tool.
 
 **Description:**  
 Route task → write spawn token → return execution bundle. Always call this instead of the Agent tool directly. Returns role, system_prompt_fragment, tools, and spawn authorization.
@@ -128,7 +130,7 @@ Response:
 
 ### `route_task` — READ-ONLY CLASSIFIER
 
-Pure classifier that returns routing + persona bundle without writing a spawn token. Use this for planning or diagnostic purposes.
+Okay so — same routing engine as `spawn_specialist`, but no token written. Use this for planning, sub-task routing in an orchestrate flow, or when you want to know where something would land without actually committing to it.
 
 **Description:**  
 Classify a task and return the optimal specialist agent with persona bundle. Pure read-only lookup — does not gate Agent spawning. Use spawn_specialist to route AND gate in one call.
@@ -212,7 +214,7 @@ Response:
 
 ### `confirm_route` — SUBAGENT SELF-CORRECTION
 
-Called by a spawned subagent on its first turn to verify it was routed correctly. If routing says otherwise, the subagent should adopt the corrected role.
+This one's for the spawned agent itself. Call it on your first turn to verify you're actually the right specialist for the task. If the classifier disagrees, you get the corrected persona and adopt it. Self-correcting agents — I thought this was a cool detail when I shipped it.
 
 **Description:**  
 Subagent self-correction. Call on your first turn as a subagent to verify you are the correct specialist. If routing says otherwise, adopt the corrected role.
@@ -331,7 +333,7 @@ Response:
 
 ### `list_agents` — DISCOVER SPECIALISTS
 
-List all available specialist agents with their categories and orchestration flags.
+64 agents in the default registry. Browse them all or filter by category. Good for building UIs, for discovery, or for when you're adding custom agents and want to check what IDs are already taken.
 
 **Description:**  
 List all available specialist agents with their categories and descriptions.
@@ -423,7 +425,7 @@ Response:
 
 ## Resources
 
-InvokerAI exposes agent profiles as MCP resources using the `agent://` URI scheme.
+Here's a thing I didn't want to skip — agent profiles are MCP resources, not just data attached to tool responses. That means editors can lazy-load them on demand via `resources/read` instead of bundling the full profile on every routing call.
 
 ### Resource format
 
@@ -474,7 +476,7 @@ User: /route implement a new payment processing endpoint
 
 ## Session Ledger
 
-The MCP server maintains an in-memory session ledger for multi-turn coherence.
+No database, no config, no persistence. Just an in-memory dict with a 30-minute TTL. Pass the same `session_id` across calls and the server tracks where you've been — active role, prior routes, last seen time. Zero setup.
 
 **Features:**
 - Optional `session_id` parameter on all routing tools

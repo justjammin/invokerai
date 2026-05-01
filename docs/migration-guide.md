@@ -1,6 +1,8 @@
 # InvokerAI v0.1.0 → v0.2.0 Migration Guide
 
-Step-by-step guide to upgrade your InvokerAI setup from v0.1.0 to v0.2.0.
+Okay so — v0.2.0 is a real architecture change, not a patch bump. The old version had echo hooks that Claude politely ignored and a single `route_task` tool that returned a role name and nothing else. This version has actual enforcement, a spawn token gate, four tools, and a persona bundle that actually changes agent behavior.
+
+The migration script handles everything. But here's what changed and why, so you know what it's doing.
 
 ## What Changed
 
@@ -33,7 +35,7 @@ Step-by-step guide to upgrade your InvokerAI setup from v0.1.0 to v0.2.0.
 
 ## Pre-migration checklist
 
-Before starting migration:
+Before you run anything — back up your configs. The migration script is idempotent but there's no reason not to have a fallback.
 
 ```bash
 # 1. Check current version
@@ -54,9 +56,11 @@ cp ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.backup.pre-v0.2
 
 ## Migration Steps
 
+Trust me on this — just run the automated path below. The manual steps are here if something goes wrong, but the script handles it in one shot.
+
 ### Step 1: Update InvokerAI package
 
-Choose one of the following based on how you installed:
+Choose one based on how you installed:
 
 **Via npm:**
 ```bash
@@ -93,7 +97,8 @@ python migrate.py
 invoker migrate
 ```
 
-This script will:
+One command, seven things fixed. Here's what it does:
+
 1. ✓ Install new hook script to `~/.invokerai/hooks/pre-agent.sh`
 2. ✓ Purge old v0.1.0 echo hooks from all editor configs
 3. ✓ Update MCP entries to use new `_mcp_entry()` detection order
@@ -132,7 +137,7 @@ New tool surface:
 
 ### Step 3: Restart editors
 
-Close and reopen all editors using InvokerAI:
+This one people skip and then wonder why nothing changed. Close and reopen everything:
 
 ```bash
 # Claude Code: Quit and restart from Applications
@@ -179,7 +184,7 @@ grep "BLOCKING REQUIREMENT" ~/.claude/CLAUDE.md
 
 ## Manual migration (if script fails)
 
-If `python migrate.py` doesn't work, follow these steps manually:
+If `python migrate.py` doesn't work — it shouldn't fail but here's the manual path if it does:
 
 ### 1. Install hook script
 
