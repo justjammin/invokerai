@@ -1,6 +1,6 @@
 {
   "name": "invokerai-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "InvokerAI MCP server — agent routing brain for Claude Code, Cursor, and Copilot",
   "license": "MIT",
   "author": "Jamin Echols",

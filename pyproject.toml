@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-invoker"
-version = "0.1.0"
+version = "0.2.0"
 description = "Agent routing brain. Given a task, returns the right specialist agent and tools."
 readme = "README.md"
 license = "MIT"

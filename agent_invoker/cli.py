@@ -139,6 +139,16 @@ def _add_target_args(p: argparse.ArgumentParser) -> None:
     group.add_argument("--all", dest="all_agents", action="store_true", help="All agents")
 
 
+def _handle_train(argv: list[str]) -> None:
+    import subprocess
+    script = Path(__file__).parent.parent / "scripts" / "build_router.py"
+    if not script.exists():
+        print(json.dumps({"error": "scripts/build_router.py not found — install from repo source"}))
+        sys.exit(1)
+    result = subprocess.run([sys.executable, str(script)] + argv)
+    sys.exit(result.returncode)
+
+
 def _show_model_info() -> None:
     import pickle
     pkl = Path.home() / ".invokerai" / "router.pkl"
@@ -169,6 +179,9 @@ def _print_help() -> None:
   invoker tools add --all TOOL [TOOL...]           Add tools to all agents
   invoker tools add --category NAME TOOL [TOOL...] Add to category
   invoker tools add --agents ID,ID TOOL [TOOL...]  Add to specific agents
+  invoker train                                    Build Phase 1 router from labeled examples
+  invoker train --phase 2                          Build Phase 2 router (requires 200+ log entries)
+
   invoker tools remove --all TOOL [TOOL...]        Remove tools
   invoker tools list AGENT_ID                      List tools for agent""")
 
