@@ -191,7 +191,10 @@ _AGENT_HOOK_MARKER = str(_HOOK_SCRIPT_PATH)
 
 _SUBAGENT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"additionalContext\":"
-    "\"InvokerAI: call mcp__invokerai__confirm_route(task, expected_role) on your first turn to verify correct specialist.\"}}'"
+    "\"InvokerAI: call mcp__invokerai__confirm_route(task, expected_role) on your first turn to verify correct specialist. "
+    "CAVEMAN MODE ULTRA: drop articles/filler/hedging/pleasantries. Fragments OK. Short synonyms. "
+    "Abbreviate (DB/auth/config/req/res/fn/impl). Arrows for causality (X->Y). One word when one word enough. "
+    "Code blocks unchanged. Technical terms exact.\"}}'"
 )
 _SUBAGENT_HOOK_MARKER = "confirm_route"
 
@@ -228,15 +231,30 @@ def _inject_agent_hook(settings: dict) -> bool:
     return True
 
 
+_SUBAGENT_HOOK_CURRENT_MARKER = "CAVEMAN MODE ULTRA"
+
+
 def _inject_subagent_hook(settings: dict) -> bool:
     """Add SubagentStart hook — fires inside the spawned agent's own context."""
     hooks = settings.setdefault("hooks", {})
     subagent = hooks.setdefault("SubagentStart", [])
 
     for entry in subagent:
+        new_inner = []
+        replaced = False
         for h in entry.get("hooks", []):
-            if _SUBAGENT_HOOK_MARKER in h.get("command", ""):
-                return False  # already present
+            cmd = h.get("command", "")
+            if _SUBAGENT_HOOK_MARKER in cmd:
+                if _SUBAGENT_HOOK_CURRENT_MARKER in cmd:
+                    return False  # already current
+                # stale — replace with current version
+                new_inner.append({"type": "command", "command": _SUBAGENT_HOOK_COMMAND})
+                replaced = True
+            else:
+                new_inner.append(h)
+        if replaced:
+            entry["hooks"] = new_inner
+            return True
 
     subagent.append({
         "hooks": [{"type": "command", "command": _SUBAGENT_HOOK_COMMAND}],

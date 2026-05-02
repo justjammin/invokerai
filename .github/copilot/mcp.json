@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "invokerai": {
+      "command": "/Users/jammin/.invokerai/venv/bin/python",
+      "type": "stdio",
+      "args": [
+        "-m",
+        "agent_invoker.mcp_server"
+      ]
+    }
+  }
+}

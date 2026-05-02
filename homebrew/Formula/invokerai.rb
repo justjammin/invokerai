@@ -17,7 +17,7 @@ class Invokerai < Formula
   homepage "https://github.com/justjammin/invokerai"
 
   # TODO: replace with actual PyPI sdist URL + sha256 after `pip publish`
-  url "https://files.pythonhosted.org/packages/source/a/agent-invoker/agent_invoker-0.1.0.tar.gz"
+  url "https://files.pythonhosted.org/packages/88/5f/2e07877321da98d41ba43f4be0d5541de79d45fad554a7f9d4ad5c5d35e8/agent_invoker-0.2.0.tar.gz"
   sha256 "PLACEHOLDER_RUN_brew_create_TO_GET_REAL_SHA256"
   license "MIT"
 
