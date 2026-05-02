@@ -3,13 +3,16 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
+
+_SPAWN_TOKEN = Path.home() / ".invokerai" / "spawn_token"
 
 
 def main() -> None:
     # Peek at argv to decide: subcommand dispatch or bare task routing
     argv = sys.argv[1:]
-    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train"}
+    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall"}
 
     if argv and argv[0] in known_commands:
         _dispatch_subcommand(argv)
@@ -55,6 +58,87 @@ def _dispatch_route(argv: list[str]) -> None:
     }, indent=2))
 
 
+# ── spawn — route + write token (CLI-first primary surface) ──────────────────
+
+def _handle_spawn(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="invoker spawn", add_help=False)
+    parser.add_argument("task", nargs="?")
+    parser.add_argument("--registry", metavar="PATH")
+    parser.add_argument("--no-log", action="store_true")
+    parser.add_argument("--persona", action="store_true", help="Include system_prompt_fragment in output")
+    args = parser.parse_args(argv)
+
+    task_text = args.task
+    if not task_text:
+        if not sys.stdin.isatty():
+            task_text = sys.stdin.read().strip()
+    if not task_text:
+        print(json.dumps({"error": "task is required"}))
+        sys.exit(1)
+
+    from agent_invoker.core import route
+    result = route(task_text, custom_registry=args.registry, log=not args.no_log)
+
+    _SPAWN_TOKEN.parent.mkdir(parents=True, exist_ok=True)
+    _SPAWN_TOKEN.write_text(str(int(time.time())))
+
+    out: dict = {
+        "routing": result.routing,
+        "role": result.role,
+        "confidence": result.confidence,
+        "tools": result.tools,
+        "source": result.source,
+        "spawn_authorized": True,
+    }
+    if args.persona and result.persona:
+        out["persona"] = result.persona
+    if result.routing == "orchestrate":
+        out["orchestrate_guidance"] = (
+            "Task spans multiple domains. Use `invoker spawn` for each sub-task. "
+            "Run sub-tasks sequentially or in parallel per dependency."
+        )
+    print(json.dumps(out, indent=2))
+
+
+# ── confirm — subagent self-check via CLI ─────────────────────────────────────
+
+def _handle_confirm(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="invoker confirm", add_help=False)
+    parser.add_argument("task", nargs="?")
+    parser.add_argument("expected_role", nargs="?")
+    args = parser.parse_args(argv)
+
+    task_text = args.task
+    expected = args.expected_role
+    if not task_text or not expected:
+        print(json.dumps({"error": "usage: invoker confirm \"task\" \"expected-role\""}))
+        sys.exit(1)
+
+    from agent_invoker.core import route
+    result = route(task_text, log=False)
+    ok = result.role == expected or result.confidence < 50
+    out: dict = {
+        "ok": ok,
+        "expected_role": expected,
+        "confirmed_role": result.role if not ok else expected,
+        "confidence": result.confidence,
+    }
+    if not ok and result.persona:
+        out["corrected_persona"] = result.persona
+    print(json.dumps(out, indent=2))
+
+
+# ── uninstall — reverse invoker setup ─────────────────────────────────────────
+
+def _handle_uninstall(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="invoker uninstall")
+    parser.add_argument("--purge", action="store_true", help="Also delete ~/.invokerai/ (venv, logs, tokens)")
+    args = parser.parse_args(argv)
+
+    from agent_invoker.setup_editors import uninstall
+    uninstall(purge=args.purge)
+
+
 # ── tools subcommand ──────────────────────────────────────────────────────────
 
 def _dispatch_subcommand(argv: list[str]) -> None:
@@ -81,6 +165,12 @@ def _dispatch_subcommand(argv: list[str]) -> None:
         _handle_train(rest)
     elif command == "route":
         _dispatch_route(rest)
+    elif command == "spawn":
+        _handle_spawn(rest)
+    elif command == "confirm":
+        _handle_confirm(rest)
+    elif command == "uninstall":
+        _handle_uninstall(rest)
 
 
 def _handle_tools(argv: list[str]) -> None:
@@ -167,12 +257,17 @@ def _show_model_info() -> None:
 
 def _print_help() -> None:
     print("""Usage:
-  invoker "task text"                              Route a task
+  invoker spawn "task"                             Route + write spawn token (primary surface, ~100 tok)
+  invoker spawn "task" --persona                   Route + token + include system_prompt_fragment
+  invoker confirm "task" "expected-role"           Subagent self-check — verify correct specialist
+  invoker "task text"                              Route only (no token, no spawn)
   invoker --registry PATH "task text"              Use custom agent registry
   invoker --no-log "task text"                     Skip logging
   invoker --model-info                             Show router phase + status
 
-  invoker setup                                    Configure MCP for Claude Code, Cursor, Kiro, Copilot
+  invoker setup                                    Configure MCP + hooks for Claude Code, Cursor, Kiro, Copilot
+  invoker uninstall                                Remove all InvokerAI config (hooks, MCP entries, CLAUDE.md block)
+  invoker uninstall --purge                        Also delete ~/.invokerai/ (venv, logs, tokens)
   invoker migrate                                  Upgrade existing setup (purge old hooks, new token gate)
   invoker mcp                                      Start MCP server (stdio)
 

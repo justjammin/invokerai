@@ -1,0 +1,53 @@
+<svg width="200" height="200" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="triGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#80c0ff"></stop>
+      <stop offset="50%" stop-color="#a060ff"></stop>
+      <stop offset="100%" stop-color="#ff40a0"></stop>
+    </linearGradient>
+    <linearGradient id="circGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe060"></stop>
+      <stop offset="100%" stop-color="#ff6020"></stop>
+    </linearGradient>
+    <linearGradient id="gemGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#80c0ff"></stop>
+      <stop offset="50%" stop-color="#a060ff"></stop>
+      <stop offset="100%" stop-color="#ff40a0"></stop>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"></feGaussianBlur>
+      <feMerge><feMergeNode in="blur"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+    </filter>
+    <filter id="glow2" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="6" result="blur"></feGaussianBlur>
+      <feMerge><feMergeNode in="blur"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+    </filter>
+  </defs>
+
+  
+  <circle cx="60" cy="60" r="50" fill="none" stroke="#a060ff" stroke-width="0.5" opacity="0.3"></circle>
+
+  
+  <circle cx="60" cy="60" r="42" fill="none" stroke="url(#circGrad)" stroke-width="1.5" stroke-dasharray="6 3" filter="url(#glow)" opacity="0.8"></circle>
+
+  
+  <polygon points="60,24 84,68 36,68" fill="none" stroke="url(#triGrad)" stroke-width="1.8" filter="url(#glow)" opacity="0.9"></polygon>
+
+  
+  <polygon points="60,72 38,46 82,46" fill="none" stroke="#a060ff" stroke-width="1" opacity="0.5"></polygon>
+
+  
+  <polygon points="60,44 70,58 60,72 50,58" fill="url(#gemGrad)" filter="url(#glow)" opacity="0.9"></polygon>
+
+  
+  <polygon points="60,44 65,54 60,54 55,54" fill="white" opacity="0.3"></polygon>
+
+  
+  <circle cx="60" cy="24" r="4" fill="#ffe060" filter="url(#glow2)"></circle>
+
+  
+  <circle cx="84" cy="68" r="4" fill="#a060ff" filter="url(#glow2)"></circle>
+
+  
+  <circle cx="36" cy="68" r="4" fill="#ff8040" filter="url(#glow2)"></circle>
+</svg>

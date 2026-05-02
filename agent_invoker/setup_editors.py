@@ -22,20 +22,26 @@ CLAUDE_MD_NODE = """\
 <!-- INVOKERAI-START -->
 ## InvokerAI — Agent Router
 
-**BLOCKING REQUIREMENT:** NEVER call the `Agent` tool directly. Always use
-`mcp__invokerai__spawn_specialist(task)` — it routes AND returns the execution
-bundle (role, persona, system_prompt_fragment, tools).
+**BLOCKING REQUIREMENT:** NEVER spawn an Agent without routing first.
 
+**Preferred (CLI — ~100 tokens):**
+```
+invoker spawn "task"           → { routing, role, tools, spawn_authorized: true }
+invoker spawn "task" --persona → also includes system_prompt_fragment
+invoker confirm "task" "role"  → { ok, confirmed_role, confidence }
+```
+
+**Also available (MCP — full persona included by default):**
 ```
 mcp__invokerai__spawn_specialist(task: str)
-→ { routing, role, confidence, tools[], persona: { system_prompt_fragment, resource_uri }, spawn_authorized: true }
+→ { routing, role, confidence, tools[], persona: { system_prompt_fragment }, spawn_authorized: true }
 ```
 
 **Rules:**
-- `routing == "direct"` → spawn returned `role` with returned `tools` and `system_prompt_fragment`
-- `routing == "orchestrate"` → use multi-agent coordination
+- `routing == "direct"` → spawn returned `role` with returned `tools`
+- `routing == "orchestrate"` → spawn multiple specialists for sub-tasks
 - `confidence < 50` → ask user to clarify before routing
-- As a subagent: call `mcp__invokerai__confirm_route(task, expected_role)` on your first turn
+- As a subagent: `invoker confirm "task" "role"` via Bash on first turn
 - User naming an agent type does NOT exempt this requirement
 <!-- INVOKERAI-END -->"""
 
@@ -75,9 +81,9 @@ if [ -n "$TASK" ] && [ -x "$VENV_PY" ]; then
     ROUTE_JSON=$("$VENV_PY" -m agent_invoker.cli --no-log "$TASK" 2>/dev/null)
     ROLE=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('role','unknown'))" 2>/dev/null)
     CONF=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('confidence',0))" 2>/dev/null)
-    printf '{"hookSpecificOutput":{"additionalContext":"InvokerAI pre-resolved: role=%s confidence=%s%%. Call mcp__invokerai__spawn_specialist(task) to get persona bundle + spawn authorization.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist(task) first — already routed above."}}\n' "$ROLE" "$CONF"
+    printf '{"hookSpecificOutput":{"additionalContext":"InvokerAI pre-resolved: role=%s confidence=%s%%. Run: invoker spawn TASK (CLI) or mcp__invokerai__spawn_specialist(task) — writes spawn token + returns bundle.","permissionDecision":"deny","permissionDecisionReason":"Run invoker spawn TASK first — already routed above."}}\n' "$ROLE" "$CONF"
 else
-    echo '{"hookSpecificOutput":{"additionalContext":"InvokerAI: call mcp__invokerai__spawn_specialist(task) — routes and returns role, persona, and tools.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist(task) first."}}'
+    echo '{"hookSpecificOutput":{"additionalContext":"InvokerAI: run invoker spawn TASK (CLI, preferred) or mcp__invokerai__spawn_specialist(task) — routes + writes spawn token.","permissionDecision":"deny","permissionDecisionReason":"Run invoker spawn TASK first."}}'
 fi
 exit 1
 """
@@ -191,16 +197,16 @@ _AGENT_HOOK_MARKER = str(_HOOK_SCRIPT_PATH)
 
 _SUBAGENT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"additionalContext\":"
-    "\"InvokerAI: call mcp__invokerai__confirm_route(task, expected_role) on your first turn to verify correct specialist. "
+    "\"InvokerAI: Bash `invoker confirm TASK ROLE` on first turn — verify correct specialist. CLI-first: use `invoker spawn TASK` not MCP for new spawns. "
     "CAVEMAN MODE ULTRA: drop articles/filler/hedging/pleasantries. Fragments OK. Short synonyms. "
     "Abbreviate (DB/auth/config/req/res/fn/impl). Arrows for causality (X->Y). One word when one word enough. "
     "Code blocks unchanged. Technical terms exact.\"}}'"
 )
-_SUBAGENT_HOOK_MARKER = "confirm_route"
+_SUBAGENT_HOOK_MARKER = "InvokerAI"
 
 _PROMPT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"additionalContext\":"
-    "\"InvokerAI: use mcp__invokerai__spawn_specialist(task) to route agent tasks. Returns role + persona + tools.\"}}'"
+    "\"InvokerAI: route agent tasks via CLI `invoker spawn TASK` (preferred) or mcp__invokerai__spawn_specialist(task). Returns role + tools + spawn authorization.\"}}'"
 )
 _PROMPT_HOOK_MARKER = "spawn_specialist"
 
@@ -231,34 +237,54 @@ def _inject_agent_hook(settings: dict) -> bool:
     return True
 
 
-_SUBAGENT_HOOK_CURRENT_MARKER = "CAVEMAN MODE ULTRA"
+_SUBAGENT_HOOK_CURRENT_MARKER = "invoker confirm TASK ROLE"
 
 
 def _inject_subagent_hook(settings: dict) -> bool:
-    """Add SubagentStart hook — fires inside the spawned agent's own context."""
+    """Add SubagentStart hook — fires inside the spawned agent's own context.
+
+    Replaces ALL stale InvokerAI entries in a single pass (avoids duplicates
+    when multiple stale entries accumulate across upgrades).
+    """
     hooks = settings.setdefault("hooks", {})
     subagent = hooks.setdefault("SubagentStart", [])
 
+    found_current = False
+    changed = False
+    new_subagent = []
+
     for entry in subagent:
         new_inner = []
-        replaced = False
         for h in entry.get("hooks", []):
             cmd = h.get("command", "")
             if _SUBAGENT_HOOK_MARKER in cmd:
                 if _SUBAGENT_HOOK_CURRENT_MARKER in cmd:
-                    return False  # already current
-                # stale — replace with current version
-                new_inner.append({"type": "command", "command": _SUBAGENT_HOOK_COMMAND})
-                replaced = True
+                    # already current — keep as-is, mark found
+                    new_inner.append(h)
+                    found_current = True
+                else:
+                    # stale — drop (will re-add once below if no current found yet)
+                    changed = True
             else:
                 new_inner.append(h)
-        if replaced:
-            entry["hooks"] = new_inner
-            return True
+        if new_inner:
+            new_entry = dict(entry)
+            new_entry["hooks"] = new_inner
+            new_subagent.append(new_entry)
+        elif new_inner != entry.get("hooks", []):
+            changed = True  # entry became empty, drop it
 
-    subagent.append({
+    if changed:
+        hooks["SubagentStart"] = new_subagent
+
+    if found_current:
+        return changed  # cleaned up stale entries but didn't need to add
+
+    # No current entry — append fresh
+    new_subagent.append({
         "hooks": [{"type": "command", "command": _SUBAGENT_HOOK_COMMAND}],
     })
+    hooks["SubagentStart"] = new_subagent
     return True
 
 
@@ -516,8 +542,132 @@ def run(pkg_dir: Path | None = None) -> None:
     inject_claude_md()
     copy_skill(pkg_dir)
     print()
-    print("Done. Restart Claude Code / Cursor / Kiro to activate the MCP server.")
-    print("Verify: mcp__invokerai__spawn_specialist is visible in Claude's tool list.")
+    print("Done. Restart Claude Code / Cursor / Kiro to activate.")
+    print("CLI-first: `invoker spawn TASK` (preferred) or mcp__invokerai__spawn_specialist(task).")
+    print("To remove: `invoker uninstall`")
+
+
+def uninstall(purge: bool = False) -> None:
+    print("Uninstalling InvokerAI...")
+    print()
+
+    # ── ~/.claude/CLAUDE.md ───────────────────────────────────────────────────
+    claude_md = Path.home() / ".claude" / "CLAUDE.md"
+    if claude_md.exists():
+        import re
+        content = claude_md.read_text()
+        if CLAUDE_MD_MARKER_START in content:
+            updated = re.sub(
+                rf"\n*{re.escape(CLAUDE_MD_MARKER_START)}.*?{re.escape(CLAUDE_MD_MARKER_END)}\n*",
+                "\n",
+                content,
+                flags=re.DOTALL,
+            )
+            claude_md.write_text(updated)
+            print("  CLAUDE.md: InvokerAI block removed")
+        else:
+            print("  CLAUDE.md: block not found (skipped)")
+
+    # ── ~/.claude.json MCP entry ──────────────────────────────────────────────
+    claude_json_path = Path.home() / ".claude.json"
+    if claude_json_path.exists():
+        try:
+            data = json.loads(claude_json_path.read_text())
+            if data.get("mcpServers", {}).pop("invokerai", None) is not None:
+                claude_json_path.write_text(json.dumps(data, indent=2) + "\n")
+                print("  ~/.claude.json: MCP entry removed")
+            else:
+                print("  ~/.claude.json: entry not found (skipped)")
+        except (json.JSONDecodeError, OSError):
+            print("  ~/.claude.json: could not parse (skipped)")
+
+    # ── ~/.claude/settings.json hooks ────────────────────────────────────────
+    settings_path = Path.home() / ".claude" / "settings.json"
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+            changed = False
+
+            # PreToolUse[Agent] — remove entries referencing hook script
+            pre = settings.get("hooks", {}).get("PreToolUse", [])
+            new_pre = [
+                e for e in pre
+                if not any(_AGENT_HOOK_MARKER in h.get("command", "") for h in e.get("hooks", []))
+            ]
+            if len(new_pre) != len(pre):
+                settings["hooks"]["PreToolUse"] = new_pre
+                changed = True
+                print("  settings.json: Agent hook removed")
+
+            # SubagentStart — remove InvokerAI entries
+            sub = settings.get("hooks", {}).get("SubagentStart", [])
+            new_sub = [
+                e for e in sub
+                if not any(_SUBAGENT_HOOK_MARKER in h.get("command", "") for h in e.get("hooks", []))
+            ]
+            if len(new_sub) != len(sub):
+                settings["hooks"]["SubagentStart"] = new_sub
+                changed = True
+                print("  settings.json: SubagentStart hook removed")
+
+            # UserPromptSubmit — remove InvokerAI entries
+            prompt = settings.get("hooks", {}).get("UserPromptSubmit", [])
+            new_prompt = [
+                e for e in prompt
+                if not any(_PROMPT_HOOK_MARKER in h.get("command", "") for h in e.get("hooks", []))
+            ]
+            if len(new_prompt) != len(prompt):
+                settings["hooks"]["UserPromptSubmit"] = new_prompt
+                changed = True
+                print("  settings.json: UserPromptSubmit hook removed")
+
+            if changed:
+                settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+            else:
+                print("  settings.json: no InvokerAI hooks found (skipped)")
+        except (json.JSONDecodeError, OSError):
+            print("  settings.json: could not parse (skipped)")
+
+    # ── ~/.cursor/mcp.json ────────────────────────────────────────────────────
+    cursor_mcp = Path.home() / ".cursor" / "mcp.json"
+    if cursor_mcp.exists():
+        try:
+            data = json.loads(cursor_mcp.read_text())
+            if data.get("mcpServers", {}).pop("invokerai", None) is not None:
+                cursor_mcp.write_text(json.dumps(data, indent=2) + "\n")
+                print("  ~/.cursor/mcp.json: entry removed")
+            else:
+                print("  ~/.cursor/mcp.json: entry not found (skipped)")
+        except (json.JSONDecodeError, OSError):
+            print("  ~/.cursor/mcp.json: could not parse (skipped)")
+
+    # ── ~/.kiro/agents/invokerai.json ─────────────────────────────────────────
+    kiro_file = Path.home() / ".kiro" / "agents" / "invokerai.json"
+    if kiro_file.exists():
+        kiro_file.unlink()
+        print("  ~/.kiro/agents/invokerai.json: removed")
+
+    # ── .github/copilot/mcp.json (cwd) ───────────────────────────────────────
+    copilot_mcp = Path.cwd() / ".github" / "copilot" / "mcp.json"
+    if copilot_mcp.exists():
+        try:
+            data = json.loads(copilot_mcp.read_text())
+            if data.get("servers", {}).pop("invokerai", None) is not None:
+                copilot_mcp.write_text(json.dumps(data, indent=2) + "\n")
+                print(f"  {copilot_mcp}: entry removed")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # ── ~/.invokerai/ (optional purge) ────────────────────────────────────────
+    invokerai_dir = Path.home() / ".invokerai"
+    if purge and invokerai_dir.exists():
+        shutil.rmtree(invokerai_dir)
+        print(f"  ~/.invokerai/: purged (venv, logs, tokens deleted)")
+    elif invokerai_dir.exists():
+        print(f"  ~/.invokerai/: kept (run with --purge to delete venv + logs)")
+
+    print()
+    print("Done. Run `pip uninstall agent-invoker` to remove the package.")
 
 
 if __name__ == "__main__":
