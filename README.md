@@ -4,7 +4,9 @@ Okay so. I got tired of watching AI agents spawn the wrong specialist and just w
 
 InvokerAI is a local MCP server that acts as the routing brain for your agents. Before any agent gets spawned, InvokerAI intercepts it, classifies the task, and hands back the right specialist: role, system prompt fragment, and tool allowlist. Single call. No cloud, no API keys, no config file roulette.
 
-One call. Right agent. Every time.
+One call. Right agent. Every time.   
+
+<img width="200" height="200" alt="image" src="https://github.com/user-attachments/assets/abf5a9fb-8e45-486e-92a7-9dd8875eb91f" />
 
 Extracted from [LENA](https://github.com/justjammin/lena), the AI orchestrator I've been running on Claude Code. After using this routing logic daily I figured it deserved its own thing.
 
