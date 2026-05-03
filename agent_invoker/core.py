@@ -48,6 +48,15 @@ class RoutingResult:
     source: str = "regex"
     agent: Agent | None = field(default=None, repr=False)
     persona: dict = field(default_factory=dict)
+    pattern: str | None = None
+    steps: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class DecomposeResult:
+    pattern: str
+    steps: list[dict]
+    domain_roles: list[tuple[str, str]]
 
 
 def route(
@@ -68,6 +77,14 @@ def route(
     tools = agent.tools if agent else []
 
     role = result.get("suggested_role")
+
+    pattern = None
+    steps: list[dict] = []
+    if result["routing"] == "orchestrate":
+        decomp = _decompose_internal(task, registry)
+        pattern = decomp.pattern
+        steps = decomp.steps
+
     routing_result = RoutingResult(
         routing=result["routing"],
         role=role,
@@ -76,6 +93,8 @@ def route(
         source=result.get("source", "regex"),
         agent=agent,
         persona=_load_persona(role) if role else {},
+        pattern=pattern,
+        steps=steps,
     )
 
     if log:
@@ -172,6 +191,138 @@ def _count_domains(t: str) -> int:
         "ml": r"\b(model|training|inference|embedding|\bllm\b|fine.?tun|rag|vector|neural)\b",
     }
     return sum(1 for p in patterns.values() if re.search(p, t))
+
+
+# ── MAS orchestration patterns ────────────────────────────────────────────────
+
+PATTERN_PIPELINE = "pipeline"
+PATTERN_PARALLEL = "parallel"
+PATTERN_SUPERVISOR = "supervisor"
+PATTERN_FEEDBACK_LOOP = "feedback_loop"
+PATTERN_HIERARCHICAL = "hierarchical"
+PATTERN_PLAN_THEN_EXECUTE = "plan_then_execute"
+
+_DOMAIN_ROLE_MAP: list[tuple[str, str, str]] = [
+    ("frontend", r"\b(css|html|react|vue|angular|svelte|jsx|tsx|dom|browser|component)\b", "frontend-developer"),
+    ("backend", r"\b(api|endpoint|service|server|controller|middleware|route|handler|rest|graphql)\b", "backend-developer"),
+    ("database", r"\b(sql|query|schema|migration|index|table|database|\bdb\b|orm|postgres|mysql|mongo)\b", "database-optimizer"),
+    ("devops", r"\b(deploy|docker|kubernetes|k8s|\bci\b|\bcd\b|pipeline|infra|cloud|aws|gcp|terraform)\b", "cloud-architect"),
+    ("security", r"\b(auth|oauth|jwt|permission|role|encrypt|credential|secret)\b", "code-reviewer"),
+    ("ml", r"\b(model|training|inference|embedding|\bllm\b|fine.?tun|rag|vector|neural)\b", "ml-engineer"),
+    ("testing", r"\b(test|spec|coverage|e2e)\b", "test-automator"),
+    ("docs", r"\b(document|docs|readme|guide|tutorial)\b", "technical-writer"),
+]
+
+_ROLE_LABELS: dict[str, str] = {
+    "frontend-developer": "UI layer",
+    "backend-developer": "API layer",
+    "database-optimizer": "data layer",
+    "cloud-architect": "infrastructure",
+    "code-reviewer": "security/quality",
+    "ml-engineer": "ML pipeline",
+    "test-automator": "test suite",
+    "technical-writer": "documentation",
+    "architect-reviewer": "architecture",
+    "fullstack-developer": "integration",
+}
+
+
+def _domain_roles(t: str) -> list[tuple[str, str]]:
+    return [(domain, role) for domain, pattern, role in _DOMAIN_ROLE_MAP if re.search(pattern, t)]
+
+
+def _detect_pattern(t: str, domain_hits: int) -> str:
+    if (
+        re.search(r"\bfeedback.{0,10}loop\b", t)
+        or re.search(r"\biterate.{0,20}until\b", t)
+        or re.search(r"\bcritic.{0,15}revise\b", t)
+        or (re.search(r"\breview\b", t) and re.search(r"\brevise?\b", t))
+    ):
+        return PATTERN_FEEDBACK_LOOP
+    if re.search(r"\b(plan.{0,10}then|design.{0,30}first|research.{0,20}(then|before)|spec.{0,10}then)\b", t):
+        return PATTERN_PLAN_THEN_EXECUTE
+    if re.search(r"\b(in parallel|simultaneously|at the same time|concurrently)\b", t):
+        return PATTERN_PARALLEL
+    if domain_hits >= 3 and re.search(r"\b(full.?stack|entire|end.to.end|enterprise|platform|system)\b", t):
+        return PATTERN_HIERARCHICAL
+    if re.search(r"\b(manage|coordinate|oversee).{0,20}(agent|team|specialist|worker)\b", t):
+        return PATTERN_SUPERVISOR
+    return PATTERN_PIPELINE
+
+
+def _generate_steps(
+    t: str,
+    pattern: str,
+    domain_roles: list[tuple[str, str]],
+    primary_role: str,
+) -> list[dict]:
+    fallback = domain_roles if domain_roles else [(None, primary_role)]
+
+    if pattern == PATTERN_FEEDBACK_LOOP:
+        generator = primary_role
+        return [
+            {"step": 1, "role": generator, "action": "Initial implementation", "parallel": False},
+            {"step": 2, "role": "code-reviewer", "action": "Review and critique", "parallel": False},
+            {"step": 3, "role": generator, "action": "Revise per feedback", "parallel": False},
+        ]
+
+    if pattern == PATTERN_PLAN_THEN_EXECUTE:
+        steps = [{"step": 1, "role": "architect-reviewer", "action": "Create implementation plan", "parallel": False}]
+        for i, (domain, role) in enumerate(fallback[:4], start=2):
+            label = _ROLE_LABELS.get(role, domain or "task")
+            steps.append({"step": i, "role": role, "action": f"Implement {label} per plan", "parallel": False})
+        return steps
+
+    if pattern == PATTERN_PARALLEL:
+        steps = []
+        for i, (domain, role) in enumerate(fallback[:4], start=1):
+            label = _ROLE_LABELS.get(role, domain or "task")
+            steps.append({"step": i, "role": role, "action": f"Implement {label}", "parallel": True})
+        steps.append({"step": len(steps) + 1, "role": "fullstack-developer", "action": "Integration and wiring", "parallel": False})
+        return steps
+
+    if pattern == PATTERN_SUPERVISOR:
+        workers = [r for _, r in domain_roles[:3]] or [primary_role]
+        steps = [{"step": 1, "role": "architect-reviewer", "action": "Decompose and assign work", "parallel": False}]
+        for i, role in enumerate(workers, start=2):
+            steps.append({"step": i, "role": role, "action": "Execute assigned subtask", "parallel": False})
+        steps.append({"step": len(steps) + 1, "role": "architect-reviewer", "action": "Review and integrate", "parallel": False})
+        return steps
+
+    if pattern == PATTERN_HIERARCHICAL:
+        steps = [{"step": 1, "role": "architect-reviewer", "action": "Top-level decomposition", "parallel": False}]
+        for i, (domain, role) in enumerate(fallback[:3], start=2):
+            label = _ROLE_LABELS.get(role, domain or "domain")
+            steps.append({"step": i, "role": role, "action": f"Lead {label} cluster", "parallel": i > 2})
+        steps.append({"step": len(steps) + 1, "role": "architect-reviewer", "action": "Final integration review", "parallel": False})
+        return steps
+
+    # PIPELINE (default) — ordered sequential
+    steps = []
+    for i, (domain, role) in enumerate(fallback[:5], start=1):
+        label = _ROLE_LABELS.get(role, domain or "task")
+        steps.append({"step": i, "role": role, "action": f"Implement {label}", "parallel": False})
+    return steps
+
+
+def _decompose_internal(task: str, registry: dict) -> "DecomposeResult":
+    t = task.lower()
+    imp_verbs = set(re.findall(
+        r"\b(build|create|implement|deploy|test|review|refactor|migrate|audit|"
+        r"integrate|add|fix|debug|analyze|design|update|remove|configure|write|generate)\b", t
+    ))
+    domain_hits = _count_domains(t)
+    pattern = _detect_pattern(t, domain_hits)
+    dr = _domain_roles(t)
+    primary_role = _suggest_role(t, imp_verbs, registry)
+    steps = _generate_steps(t, pattern, dr, primary_role)
+    return DecomposeResult(pattern=pattern, steps=steps, domain_roles=dr)
+
+
+def decompose(task: str, custom_registry: str | None = None) -> "DecomposeResult":
+    """Detect orchestration pattern and generate skeleton steps for a multi-agent task."""
+    registry = load_registry(custom_registry)
+    return _decompose_internal(task, registry)
 
 
 def _suggest_role(t: str, imp_verbs: set[str], registry: dict[str, Agent]) -> str:

@@ -12,7 +12,7 @@ _SPAWN_TOKEN = Path.home() / ".invokerai" / "spawn_token"
 def main() -> None:
     # Peek at argv to decide: subcommand dispatch or bare task routing
     argv = sys.argv[1:]
-    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall"}
+    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall", "decompose"}
 
     if argv and argv[0] in known_commands:
         _dispatch_subcommand(argv)
@@ -93,10 +93,8 @@ def _handle_spawn(argv: list[str]) -> None:
     if args.persona and result.persona:
         out["persona"] = result.persona
     if result.routing == "orchestrate":
-        out["orchestrate_guidance"] = (
-            "Task spans multiple domains. Use `invoker spawn` for each sub-task. "
-            "Run sub-tasks sequentially or in parallel per dependency."
-        )
+        out["pattern"] = result.pattern
+        out["steps"] = result.steps
     print(json.dumps(out, indent=2))
 
 
@@ -139,6 +137,31 @@ def _handle_uninstall(argv: list[str]) -> None:
     uninstall(purge=args.purge)
 
 
+# ── decompose — pattern detection + step skeleton ─────────────────────────────
+
+def _handle_decompose(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="invoker decompose", add_help=False)
+    parser.add_argument("task", nargs="?")
+    parser.add_argument("--registry", metavar="PATH")
+    args = parser.parse_args(argv)
+
+    task_text = args.task
+    if not task_text:
+        if not sys.stdin.isatty():
+            task_text = sys.stdin.read().strip()
+    if not task_text:
+        print(json.dumps({"error": "task is required"}))
+        sys.exit(1)
+
+    from agent_invoker.core import decompose
+    result = decompose(task_text, custom_registry=args.registry)
+    print(json.dumps({
+        "pattern": result.pattern,
+        "steps": result.steps,
+        "domain_roles": [{"domain": d, "role": r} for d, r in result.domain_roles],
+    }, indent=2))
+
+
 # ── tools subcommand ──────────────────────────────────────────────────────────
 
 def _dispatch_subcommand(argv: list[str]) -> None:
@@ -171,6 +194,8 @@ def _dispatch_subcommand(argv: list[str]) -> None:
         _handle_confirm(rest)
     elif command == "uninstall":
         _handle_uninstall(rest)
+    elif command == "decompose":
+        _handle_decompose(rest)
 
 
 def _handle_tools(argv: list[str]) -> None:
@@ -264,6 +289,8 @@ def _print_help() -> None:
   invoker --registry PATH "task text"              Use custom agent registry
   invoker --no-log "task text"                     Skip logging
   invoker --model-info                             Show router phase + status
+
+  invoker decompose "task"                         Detect MAS pattern + generate skeleton steps (orchestrate only)
 
   invoker setup                                    Configure MCP + hooks for Claude Code, Cursor, Kiro, Copilot
   invoker uninstall                                Remove all InvokerAI config (hooks, MCP entries, CLAUDE.md block)

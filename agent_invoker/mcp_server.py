@@ -148,7 +148,24 @@ _LIST_AGENTS_SCHEMA = {
     "annotations": {"readOnlyHint": True, "idempotentHint": True},
 }
 
-ALL_TOOLS = [_ROUTE_TASK_SCHEMA, _SPAWN_SPECIALIST_SCHEMA, _CONFIRM_ROUTE_SCHEMA, _LIST_AGENTS_SCHEMA]
+_DECOMPOSE_TASK_SCHEMA = {
+    "name": "decompose_task",
+    "description": (
+        "Detect the MAS orchestration pattern for a multi-agent task and return skeleton steps "
+        "with role assignments. Use after spawn_specialist returns routing=='orchestrate'."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "task": {"type": "string", "description": "Task text to decompose"},
+            "custom_registry": {"type": "string", "description": "Optional path to custom agents JSON"},
+        },
+        "required": ["task"],
+    },
+    "annotations": {"readOnlyHint": True, "idempotentHint": True},
+}
+
+ALL_TOOLS = [_ROUTE_TASK_SCHEMA, _SPAWN_SPECIALIST_SCHEMA, _CONFIRM_ROUTE_SCHEMA, _LIST_AGENTS_SCHEMA, _DECOMPOSE_TASK_SCHEMA]
 
 SERVER_INFO = {"name": "invokerai", "version": "0.2.0"}
 
@@ -214,10 +231,8 @@ def _handle_spawn_specialist(args: dict, id: Any) -> None:
         _SPAWN_TOKEN.write_text(str(int(time.time())))
         out = _route_output(result, session_id, authorized=True)
         if result.routing == "orchestrate":
-            out["orchestrate_guidance"] = (
-                "Task spans multiple domains. Spawn multiple specialists sequentially. "
-                "Use route_task for each sub-task to get the right role."
-            )
+            out["pattern"] = result.pattern
+            out["steps"] = result.steps
         _respond(id, {"content": [{"type": "text", "text": json.dumps(out, indent=2)}]})
     except Exception as e:
         _error(id, -32603, str(e))
@@ -243,6 +258,24 @@ def _handle_confirm_route(args: dict, id: Any) -> None:
         }
         if not ok and result.persona:
             out["corrected_persona"] = result.persona
+        _respond(id, {"content": [{"type": "text", "text": json.dumps(out, indent=2)}]})
+    except Exception as e:
+        _error(id, -32603, str(e))
+
+
+def _handle_decompose_task(args: dict, id: Any) -> None:
+    task = args.get("task", "").strip()
+    if not task:
+        _error(id, -32602, "task is required")
+        return
+    try:
+        from agent_invoker.core import decompose
+        result = decompose(task, custom_registry=args.get("custom_registry"))
+        out = {
+            "pattern": result.pattern,
+            "steps": result.steps,
+            "domain_roles": [{"domain": d, "role": r} for d, r in result.domain_roles],
+        }
         _respond(id, {"content": [{"type": "text", "text": json.dumps(out, indent=2)}]})
     except Exception as e:
         _error(id, -32603, str(e))
@@ -304,6 +337,8 @@ def _handle(req: dict) -> None:
             _handle_confirm_route(args, id)
         elif name == "list_agents":
             _handle_list_agents(args, id)
+        elif name == "decompose_task":
+            _handle_decompose_task(args, id)
         else:
             _error(id, -32601, f"Unknown tool: {name}")
 

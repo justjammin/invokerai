@@ -86,11 +86,11 @@ class TestInitialize:
 # ---------------------------------------------------------------------------
 
 class TestToolsList:
-    def test_returns_all_four_tools(self):
+    def test_returns_all_tools(self):
         resp = call(rpc("tools/list", {}))
         tools = resp["result"]["tools"]
         names = {t["name"] for t in tools}
-        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents"}
+        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task"}
 
     def test_each_tool_has_input_schema(self):
         resp = call(rpc("tools/list", {}))
@@ -183,20 +183,22 @@ class TestSpawnSpecialist:
         resp = call(tool_call("spawn_specialist", {"task": ""}))
         assert resp["error"]["code"] == -32602
 
-    def test_orchestrate_task_includes_guidance(self):
-        # Large multi-domain task should trigger orchestrate routing
+    def test_orchestrate_task_includes_pattern_and_steps(self):
         task = (
             "build the frontend react components, implement the backend api, "
             "configure the database schema, deploy to kubernetes, and write full documentation"
         )
         payload = self._spawn(task)
         if payload.get("routing") == "orchestrate":
-            assert "orchestrate_guidance" in payload
+            assert "pattern" in payload
+            assert isinstance(payload["steps"], list)
+            assert len(payload["steps"]) > 0
 
-    def test_direct_task_no_orchestrate_guidance(self):
+    def test_direct_task_no_pattern(self):
         payload = self._spawn("fix the null pointer crash in auth.py")
         if payload.get("routing") == "direct":
-            assert "orchestrate_guidance" not in payload
+            assert "pattern" not in payload
+            assert "steps" not in payload
 
     def test_spawn_token_contains_numeric_timestamp(self):
         self._spawn("debug the login failure in user.py")

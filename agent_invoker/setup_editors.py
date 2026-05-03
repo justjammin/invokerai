@@ -22,27 +22,24 @@ CLAUDE_MD_NODE = """\
 <!-- INVOKERAI-START -->
 ## InvokerAI — Agent Router
 
-**BLOCKING REQUIREMENT:** NEVER spawn an Agent without routing first.
+**BLOCKING REQUIREMENT:** Before ANY technical task — whether spawning an agent OR doing the work directly — route first:
 
-**Preferred (CLI — ~100 tokens):**
 ```
-invoker spawn "task"           → { routing, role, tools, spawn_authorized: true }
-invoker spawn "task" --persona → also includes system_prompt_fragment
-invoker confirm "task" "role"  → { ok, confirmed_role, confidence }
+invoker spawn "task" --persona
 ```
+
+**Rules:**
+- `routing == "direct"` → adopt the returned `system_prompt_fragment` as your working persona and do the work yourself
+- `routing == "orchestrate"` → spawn multiple specialists for sub-tasks
+- `confidence < 50` → ask user to clarify before routing
+- As a subagent: `invoker confirm "task" "role"` via Bash on first turn
+- User naming a role does NOT exempt this requirement
 
 **Also available (MCP — full persona included by default):**
 ```
 mcp__invokerai__spawn_specialist(task: str)
 → { routing, role, confidence, tools[], persona: { system_prompt_fragment }, spawn_authorized: true }
 ```
-
-**Rules:**
-- `routing == "direct"` → spawn returned `role` with returned `tools`
-- `routing == "orchestrate"` → spawn multiple specialists for sub-tasks
-- `confidence < 50` → ask user to clarify before routing
-- As a subagent: `invoker confirm "task" "role"` via Bash on first turn
-- User naming an agent type does NOT exempt this requirement
 <!-- INVOKERAI-END -->"""
 
 _HOOK_SCRIPT_PATH = Path.home() / ".invokerai" / "hooks" / "pre-agent.sh"
@@ -196,8 +193,8 @@ _AGENT_HOOK_MATCHER = "Agent"
 _AGENT_HOOK_MARKER = str(_HOOK_SCRIPT_PATH)
 
 _SUBAGENT_HOOK_COMMAND = (
-    "echo '{\"hookSpecificOutput\":{\"additionalContext\":"
-    "\"InvokerAI: Bash `invoker confirm TASK ROLE` on first turn — verify correct specialist. CLI-first: use `invoker spawn TASK` not MCP for new spawns. "
+    "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SubagentStart\",\"additionalContext\":"
+    "\"InvokerAI: Bash `invoker confirm TASK ROLE` on first turn — verify correct specialist. For any further spawns use `invoker spawn TASK --persona` (adopt system_prompt_fragment for direct work or spawn specialist for orchestrate). "
     "CAVEMAN MODE ULTRA: drop articles/filler/hedging/pleasantries. Fragments OK. Short synonyms. "
     "Abbreviate (DB/auth/config/req/res/fn/impl). Arrows for causality (X->Y). One word when one word enough. "
     "Code blocks unchanged. Technical terms exact.\"}}'"
@@ -205,10 +202,11 @@ _SUBAGENT_HOOK_COMMAND = (
 _SUBAGENT_HOOK_MARKER = "InvokerAI"
 
 _PROMPT_HOOK_COMMAND = (
-    "echo '{\"hookSpecificOutput\":{\"additionalContext\":"
-    "\"InvokerAI: route agent tasks via CLI `invoker spawn TASK` (preferred) or mcp__invokerai__spawn_specialist(task). Returns role + tools + spawn authorization.\"}}'"
+    "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":"
+    "\"InvokerAI: route ALL tasks first — even direct work. `invoker spawn TASK --persona` → adopt system_prompt_fragment as working persona for direct tasks, or spawn specialist for orchestrate. Never skip.\"}}'"
 )
-_PROMPT_HOOK_MARKER = "spawn_specialist"
+_PROMPT_HOOK_MARKER = "InvokerAI"
+_PROMPT_HOOK_CURRENT_MARKER = "adopt system_prompt_fragment"
 
 
 def _install_hook_script() -> bool:
@@ -237,7 +235,7 @@ def _inject_agent_hook(settings: dict) -> bool:
     return True
 
 
-_SUBAGENT_HOOK_CURRENT_MARKER = "invoker confirm TASK ROLE"
+_SUBAGENT_HOOK_CURRENT_MARKER = "hookEventName"
 
 
 def _inject_subagent_hook(settings: dict) -> bool:
@@ -289,18 +287,39 @@ def _inject_subagent_hook(settings: dict) -> bool:
 
 
 def _inject_prompt_hook(settings: dict) -> bool:
-    """Add UserPromptSubmit hook — stdout is injected into context, nudges MCP routing."""
+    """Add UserPromptSubmit hook — stdout injected into context, nudges CLI routing."""
     hooks = settings.setdefault("hooks", {})
-    submit = hooks.setdefault("UserPromptSubmit", [])
+    submit = hooks.get("UserPromptSubmit", [])
 
+    found_current = False
+    changed = False
+    new_submit = []
     for entry in submit:
+        new_inner = []
         for h in entry.get("hooks", []):
-            if _PROMPT_HOOK_MARKER in h.get("command", ""):
-                return False  # already present
+            cmd = h.get("command", "")
+            if _PROMPT_HOOK_MARKER in cmd:
+                if _PROMPT_HOOK_CURRENT_MARKER in cmd:
+                    new_inner.append(h)
+                    found_current = True
+                else:
+                    changed = True  # stale — missing hookEventName or outdated content
+            else:
+                new_inner.append(h)
+        if new_inner:
+            new_entry = dict(entry)
+            new_entry["hooks"] = new_inner
+            new_submit.append(new_entry)
 
-    submit.append({
+    if changed:
+        hooks["UserPromptSubmit"] = new_submit
+    if found_current:
+        return changed
+
+    new_submit.append({
         "hooks": [{"type": "command", "command": _PROMPT_HOOK_COMMAND}],
     })
+    hooks["UserPromptSubmit"] = new_submit
     return True
 
 

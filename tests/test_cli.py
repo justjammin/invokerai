@@ -85,12 +85,14 @@ class TestSpawn:
         out = run_spawn(["add unit tests for the router"])
         assert isinstance(out["confidence"], int)
 
-    def test_orchestrate_includes_guidance(self):
+    def test_orchestrate_includes_pattern_and_steps(self):
         out = run_spawn(
             ["build a full stack app with database migrations, API, frontend, and deploy to AWS"]
         )
         if out["routing"] == "orchestrate":
-            assert "orchestrate_guidance" in out
+            assert "pattern" in out
+            assert isinstance(out["steps"], list)
+            assert len(out["steps"]) > 0
 
     def test_missing_task_exits_with_error(self):
         buf = StringIO()
@@ -178,6 +180,137 @@ class TestConfirm:
         _SPAWN_TOKEN.unlink(missing_ok=True)
         run_confirm(["fix the login bug", "debugger"])
         assert not _SPAWN_TOKEN.exists()
+
+
+# ---------------------------------------------------------------------------
+# decompose CLI
+# ---------------------------------------------------------------------------
+
+def run_decompose(args: list[str]) -> dict:
+    buf = StringIO()
+    with patch("sys.stdout", buf), patch("sys.argv", ["invoker", "decompose"] + args):
+        try:
+            from agent_invoker.cli import _handle_decompose
+            _handle_decompose(args)
+        except SystemExit:
+            pass
+    return json.loads(buf.getvalue())
+
+
+class TestDecomposeCli:
+    def test_returns_pattern(self):
+        out = run_decompose(["build frontend and backend and deploy to kubernetes"])
+        assert "pattern" in out
+        assert isinstance(out["pattern"], str)
+
+    def test_returns_steps(self):
+        out = run_decompose(["build frontend and backend and deploy to kubernetes"])
+        assert isinstance(out["steps"], list)
+        assert len(out["steps"]) > 0
+
+    def test_steps_have_required_fields(self):
+        out = run_decompose(["build an api and deploy it"])
+        for step in out["steps"]:
+            assert "step" in step
+            assert "role" in step
+            assert "action" in step
+            assert "parallel" in step
+
+    def test_returns_domain_roles(self):
+        out = run_decompose(["build react frontend and postgres backend"])
+        assert isinstance(out["domain_roles"], list)
+
+    def test_missing_task_exits_with_error(self):
+        buf = StringIO()
+        fake_stdin = StringIO("")
+        with patch("sys.stdout", buf), patch("sys.stdin", fake_stdin):
+            with pytest.raises(SystemExit):
+                from agent_invoker.cli import _handle_decompose
+                _handle_decompose([])
+        assert "error" in json.loads(buf.getvalue())
+
+    def test_feedback_loop_pattern(self):
+        out = run_decompose(["review the code and revise until it passes all checks"])
+        assert out["pattern"] == "feedback_loop"
+
+    def test_plan_then_execute_pattern(self):
+        out = run_decompose(["design the architecture first then implement the services"])
+        assert out["pattern"] == "plan_then_execute"
+
+    def test_parallel_pattern(self):
+        out = run_decompose(["implement the frontend and backend simultaneously"])
+        assert out["pattern"] == "parallel"
+
+    def test_pipeline_is_default_pattern(self):
+        out = run_decompose(["build an api, add a database, and write tests"])
+        assert out["pattern"] == "pipeline"
+
+    def test_feedback_loop_has_three_steps(self):
+        out = run_decompose(["generate the report then critique and revise"])
+        if out["pattern"] == "feedback_loop":
+            assert len(out["steps"]) == 3
+
+    def test_parallel_steps_marked_parallel(self):
+        out = run_decompose(["build frontend and backend concurrently"])
+        if out["pattern"] == "parallel":
+            parallel_steps = [s for s in out["steps"] if s["parallel"]]
+            assert len(parallel_steps) >= 1
+
+    def test_plan_then_execute_first_step_is_planner(self):
+        out = run_decompose(["plan then implement the payment gateway"])
+        if out["pattern"] == "plan_then_execute":
+            assert out["steps"][0]["role"] == "architect-reviewer"
+
+
+# ---------------------------------------------------------------------------
+# decompose — core unit tests
+# ---------------------------------------------------------------------------
+
+class TestDecomposeCore:
+    def test_decompose_returns_decompose_result(self):
+        from agent_invoker.core import decompose, DecomposeResult
+        result = decompose("build the api and deploy to aws")
+        assert isinstance(result, DecomposeResult)
+
+    def test_detect_pattern_feedback_loop(self):
+        from agent_invoker.core import _detect_pattern, PATTERN_FEEDBACK_LOOP
+        assert _detect_pattern("review and revise until approved", 1) == PATTERN_FEEDBACK_LOOP
+
+    def test_detect_pattern_plan_then_execute(self):
+        from agent_invoker.core import _detect_pattern, PATTERN_PLAN_THEN_EXECUTE
+        assert _detect_pattern("plan then build the system", 2) == PATTERN_PLAN_THEN_EXECUTE
+
+    def test_detect_pattern_parallel(self):
+        from agent_invoker.core import _detect_pattern, PATTERN_PARALLEL
+        assert _detect_pattern("run tasks in parallel", 2) == PATTERN_PARALLEL
+
+    def test_detect_pattern_hierarchical(self):
+        from agent_invoker.core import _detect_pattern, PATTERN_HIERARCHICAL
+        assert _detect_pattern("build a full end-to-end platform", 4) == PATTERN_HIERARCHICAL
+
+    def test_detect_pattern_pipeline_default(self):
+        from agent_invoker.core import _detect_pattern, PATTERN_PIPELINE
+        assert _detect_pattern("build an api and add tests", 2) == PATTERN_PIPELINE
+
+    def test_domain_roles_detects_frontend(self):
+        from agent_invoker.core import _domain_roles
+        roles = _domain_roles("build a react component")
+        assert any(r == "frontend-developer" for _, r in roles)
+
+    def test_domain_roles_detects_database(self):
+        from agent_invoker.core import _domain_roles
+        roles = _domain_roles("migrate the postgres schema")
+        assert any(r == "database-optimizer" for _, r in roles)
+
+    def test_route_orchestrate_includes_pattern(self):
+        from agent_invoker.core import route
+        result = route(
+            "build the frontend, implement the api, migrate the database, and deploy to kubernetes",
+            log=False,
+        )
+        if result.routing == "orchestrate":
+            assert result.pattern is not None
+            assert isinstance(result.steps, list)
 
 
 # ---------------------------------------------------------------------------

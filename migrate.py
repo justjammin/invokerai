@@ -31,6 +31,13 @@ _OLD_HOOK_MARKERS = [
     "confirm correct specialist",          # old subagent hook text
 ]
 
+# Hooks that have the right marker content but are missing hookEventName — handled
+# by _inject_subagent_hook / _inject_prompt_hook stale detection, not purge. Listed
+# here only for documentation; purge skips them intentionally so inject fns replace them.
+_STALE_MISSING_HOOK_EVENT_NAME_MARKERS = [
+    "hookSpecificOutput",  # any hookSpecificOutput without hookEventName is stale
+]
+
 _OLD_CLAUDE_MD_MARKER_START = "<!-- INVOKERAI-START -->"
 _OLD_CLAUDE_MD_MARKER_END = "<!-- INVOKERAI-END -->"
 
@@ -120,6 +127,8 @@ def migrate_claude_code(pkg_dir: Path) -> None:
     if purged or changed:
         settings_path.write_text(json.dumps(settings, indent=2) + "\n")
         print("  Claude Code: hooks migrated → ~/.claude/settings.json")
+        if changed:
+            print("    (stale hooks replaced — hookEventName now present in SubagentStart + UserPromptSubmit)")
     else:
         print("  Claude Code: hooks already current (skipped)")
 
