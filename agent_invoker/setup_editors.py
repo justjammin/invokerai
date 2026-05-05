@@ -22,49 +22,76 @@ CLAUDE_MD_NODE = """\
 <!-- INVOKERAI-START -->
 ## InvokerAI — Agent Router
 
-**BLOCKING REQUIREMENT:** Before ANY technical task — whether spawning an agent OR doing the work directly — route first:
+**BLOCKING REQUIREMENT:** NEVER call the `Agent` tool directly and NEVER do coding tasks directly. Always use
+`mcp__invokerai__spawn_specialist(task, domains=[...])` — it routes AND returns the execution bundle.
+
+**ROLE: orchestrator/planner ONLY.** Never write code. Never read files for implementation purposes.
+Only: plan, decompose, identify domains, call spawn_specialist.
+
+**Canonical domains** (pass 1–N):
+`architecture` | `backend` | `frontend` | `database` | `devops` | `security`
+`ml` | `testing` | `documentation` | `mobile` | `data` | `code-review`
 
 ```
-invoker spawn "task" --persona
+mcp__invokerai__spawn_specialist(task: str, domains: list[str])
+→ { routing, role, confidence, tools[], persona: { system_prompt_fragment },
+    spawn_authorized: true, spawn_count: N, steps: [...] }
 ```
 
 **Rules:**
-- `routing == "direct"` → adopt the returned `system_prompt_fragment` as your working persona and do the work yourself
-- `routing == "orchestrate"` → spawn multiple specialists for sub-tasks
+- `routing == "direct"` → spawn returned `role` with returned `tools` and `system_prompt_fragment`
+- `routing == "orchestrate"` → spawn each step in `steps` array sequentially (or parallel where `parallel: true`)
 - `confidence < 50` → ask user to clarify before routing
-- As a subagent: `invoker confirm "task" "role"` via Bash on first turn
-- User naming a role does NOT exempt this requirement
+- As a subagent: call `mcp__invokerai__confirm_route(task, expected_role)` on your first turn
+- User naming an agent type does NOT exempt this requirement
 
-**Also available (MCP — full persona included by default):**
-```
-mcp__invokerai__spawn_specialist(task: str)
-→ { routing, role, confidence, tools[], persona: { system_prompt_fragment }, spawn_authorized: true }
-```
+**SKILL BYPASS:** When running inside a skill invocation (/graphify, /kyoko, /hyperframes,
+/remotion, /weave, etc.), do NOT call mcp__invokerai__spawn_specialist. Skills manage their own
+agent spawning. InvokerAI routing applies only to direct user tasks.
 <!-- INVOKERAI-END -->"""
 
 _HOOK_SCRIPT_PATH = Path.home() / ".invokerai" / "hooks" / "pre-agent.sh"
 
 _HOOK_SCRIPT = r"""#!/bin/bash
-# InvokerAI PreToolUse[Agent] hook — B+C hybrid with spawn token gate
-# Allows Agent calls authorized by spawn_specialist; blocks and pre-routes all others.
+# InvokerAI PreToolUse[Agent] hook — spawn token gate (multi-count)
+# Allows Agent calls authorized by spawn_specialist; blocks all others.
 
 VENV_PY="$HOME/.invokerai/venv/bin/python"
 TOKEN="$HOME/.invokerai/spawn_token"
 TOKEN_TTL=30
 
-# Token gate: spawn_specialist wrote this token — allow the Agent call
+# Token gate: spawn_specialist wrote this token — allow and decrement count
 if [ -f "$TOKEN" ]; then
-    TOKEN_TS=$(cat "$TOKEN" 2>/dev/null)
-    rm -f "$TOKEN"
-    if [[ "$TOKEN_TS" =~ ^[0-9]+$ ]]; then
+    TOKEN_CONTENT=$(cat "$TOKEN" 2>/dev/null)
+
+    # Support both legacy format (timestamp only) and new format (count:timestamp)
+    if [[ "$TOKEN_CONTENT" =~ ^([0-9]+):([0-9]+)$ ]]; then
+        TOKEN_COUNT="${BASH_REMATCH[1]}"
+        TOKEN_TS="${BASH_REMATCH[2]}"
+    elif [[ "$TOKEN_CONTENT" =~ ^[0-9]+$ ]]; then
+        TOKEN_COUNT=1
+        TOKEN_TS="$TOKEN_CONTENT"
+    else
+        TOKEN_COUNT=0
+        TOKEN_TS=0
+    fi
+
+    if [ "$TOKEN_COUNT" -gt 0 ]; then
         TOKEN_AGE=$(( $(date +%s) - TOKEN_TS ))
         if [ "$TOKEN_AGE" -lt "$TOKEN_TTL" ]; then
+            # Decrement or remove
+            if [ "$TOKEN_COUNT" -gt 1 ]; then
+                echo "$(( TOKEN_COUNT - 1 )):$TOKEN_TS" > "$TOKEN"
+            else
+                rm -f "$TOKEN"
+            fi
             exit 0
         fi
     fi
+    rm -f "$TOKEN"
 fi
 
-# No valid token — block. Pre-resolve route if CLI available (Option B).
+# No valid token — block with guidance
 TASK=$(echo "${CLAUDE_TOOL_INPUT:-{}}" | "$VENV_PY" -c "
 import sys, json
 try:
@@ -78,9 +105,9 @@ if [ -n "$TASK" ] && [ -x "$VENV_PY" ]; then
     ROUTE_JSON=$("$VENV_PY" -m agent_invoker.cli --no-log "$TASK" 2>/dev/null)
     ROLE=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('role','unknown'))" 2>/dev/null)
     CONF=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('confidence',0))" 2>/dev/null)
-    printf '{"hookSpecificOutput":{"additionalContext":"InvokerAI pre-resolved: role=%s confidence=%s%%. Run: invoker spawn TASK (CLI) or mcp__invokerai__spawn_specialist(task) — writes spawn token + returns bundle.","permissionDecision":"deny","permissionDecisionReason":"Run invoker spawn TASK first — already routed above."}}\n' "$ROLE" "$CONF"
+    printf '{"hookSpecificOutput":{"additionalContext":"InvokerAI pre-resolved: role=%s confidence=%s%%. Call mcp__invokerai__spawn_specialist(task, domains=[...]) — writes spawn token + returns execution bundle.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist first."}}\n' "$ROLE" "$CONF"
 else
-    echo '{"hookSpecificOutput":{"additionalContext":"InvokerAI: run invoker spawn TASK (CLI, preferred) or mcp__invokerai__spawn_specialist(task) — routes + writes spawn token.","permissionDecision":"deny","permissionDecisionReason":"Run invoker spawn TASK first."}}'
+    echo '{"hookSpecificOutput":{"additionalContext":"InvokerAI: call mcp__invokerai__spawn_specialist(task, domains=[...]) — routes, writes spawn token, returns execution bundle.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist first."}}'
 fi
 exit 1
 """
@@ -194,7 +221,10 @@ _AGENT_HOOK_MARKER = str(_HOOK_SCRIPT_PATH)
 
 _SUBAGENT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SubagentStart\",\"additionalContext\":"
-    "\"InvokerAI: Bash `invoker confirm TASK ROLE` on first turn — verify correct specialist. For any further spawns use `invoker spawn TASK --persona` (adopt system_prompt_fragment for direct work or spawn specialist for orchestrate). "
+    "\"InvokerAI: call mcp__invokerai__confirm_route(task, expected_role) on first turn — verify correct specialist. "
+    "ROLE: orchestrator/planner ONLY. Never write code. Never implement directly. "
+    "Identify 1+ domains from: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
+    "Call mcp__invokerai__spawn_specialist(task, domains=[...]) — returns execution bundle + spawns specialist+reviewer. "
     "CAVEMAN MODE ULTRA: drop articles/filler/hedging/pleasantries. Fragments OK. Short synonyms. "
     "Abbreviate (DB/auth/config/req/res/fn/impl). Arrows for causality (X->Y). One word when one word enough. "
     "Code blocks unchanged. Technical terms exact.\"}}'"
@@ -203,10 +233,12 @@ _SUBAGENT_HOOK_MARKER = "InvokerAI"
 
 _PROMPT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":"
-    "\"InvokerAI: route ALL tasks first — even direct work. `invoker spawn TASK --persona` → adopt system_prompt_fragment as working persona for direct tasks, or spawn specialist for orchestrate. Never skip.\"}}'"
+    "\"InvokerAI: route agent tasks via mcp__invokerai__spawn_specialist(task, domains=[...]). "
+    "Identify domains first: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
+    "Never spawn Agent directly. Never do coding tasks directly — only plan and orchestrate.\"}}'"
 )
 _PROMPT_HOOK_MARKER = "InvokerAI"
-_PROMPT_HOOK_CURRENT_MARKER = "adopt system_prompt_fragment"
+_PROMPT_HOOK_CURRENT_MARKER = "mcp__invokerai__spawn_specialist"
 
 
 def _install_hook_script() -> bool:

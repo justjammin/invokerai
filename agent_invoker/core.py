@@ -50,6 +50,7 @@ class RoutingResult:
     persona: dict = field(default_factory=dict)
     pattern: str | None = None
     steps: list[dict] = field(default_factory=list)
+    spawn_count: int = 1
 
 
 @dataclass
@@ -59,42 +60,64 @@ class DecomposeResult:
     domain_roles: list[tuple[str, str]]
 
 
+def _generate_minimal_steps(primary_role: str) -> list[dict]:
+    """Minimum 2-step MAS for single-domain tasks: specialist → reviewer."""
+    return [
+        {"step": 1, "role": primary_role, "action": "Implement task", "parallel": False},
+        {"step": 2, "role": "code-reviewer", "action": "Review output", "parallel": False},
+    ]
+
+
 def route(
     task: str,
     custom_registry: str | None = None,
     log: bool = True,
+    domains: list[str] | None = None,
 ) -> RoutingResult:
     registry = load_registry(custom_registry)
 
-    result = _regex_score(task, registry)
-
-    if result["confidence"] < 70:
-        ml = classifier.predict(task)
-        if ml and ml["confidence"] > result["confidence"]:
-            result.update(ml)
-
-    agent = registry.get(result.get("suggested_role") or "")
-    tools = agent.tools if agent else []
-
-    role = result.get("suggested_role")
-
-    pattern = None
-    steps: list[dict] = []
-    if result["routing"] == "orchestrate":
-        decomp = _decompose_internal(task, registry)
+    if domains:
+        decomp = _decompose_internal(task, registry, explicit_domains=domains)
+        execute_roles = [
+            s["role"] for s in decomp.steps
+            if s["role"] not in ("architect-reviewer", "code-reviewer", "cloud-architect")
+        ]
+        role = execute_roles[0] if execute_roles else _EXPLICIT_DOMAIN_ROLE.get(domains[0])
+        confidence = 90
+        source = "domains"
         pattern = decomp.pattern
         steps = decomp.steps
+    else:
+        interim = _regex_score(task, registry)
+        if interim["confidence"] < 70:
+            ml = classifier.predict(task)
+            if ml and ml["confidence"] > interim["confidence"]:
+                interim.update(ml)
+        confidence = interim["confidence"]
+        source = interim.get("source", "regex")
+        role = interim.get("suggested_role")
+        if interim["routing"] == "orchestrate":
+            decomp = _decompose_internal(task, registry)
+            pattern = decomp.pattern
+            steps = decomp.steps
+        else:
+            steps = _generate_minimal_steps(role or "backend-developer")
+            pattern = PATTERN_PIPELINE
+
+    agent = registry.get(role or "")
+    tools = agent.tools if agent else []
 
     routing_result = RoutingResult(
-        routing=result["routing"],
+        routing="orchestrate",
         role=role,
-        confidence=result["confidence"],
+        confidence=confidence,
         tools=tools,
-        source=result.get("source", "regex"),
+        source=source,
         agent=agent,
         persona=_load_persona(role) if role else {},
         pattern=pattern,
         steps=steps,
+        spawn_count=len(steps),
     )
 
     if log:
@@ -202,6 +225,24 @@ PATTERN_FEEDBACK_LOOP = "feedback_loop"
 PATTERN_HIERARCHICAL = "hierarchical"
 PATTERN_PLAN_THEN_EXECUTE = "plan_then_execute"
 
+# Canonical domain → role mapping (explicit domains from agent)
+_EXPLICIT_DOMAIN_ROLE: dict[str, str] = {
+    "architecture": "architect-reviewer",
+    "backend": "backend-developer",
+    "frontend": "frontend-developer",
+    "database": "database-optimizer",
+    "devops": "cloud-architect",
+    "security": "code-reviewer",
+    "ml": "ml-engineer",
+    "testing": "test-automator",
+    "documentation": "technical-writer",
+    "mobile": "mobile-developer",
+    "data": "data-engineer",
+    "code-review": "code-reviewer",
+}
+
+CANONICAL_DOMAINS = list(_EXPLICIT_DOMAIN_ROLE.keys())
+
 _DOMAIN_ROLE_MAP: list[tuple[str, str, str]] = [
     ("frontend", r"\b(css|html|react|vue|angular|svelte|jsx|tsx|dom|browser|component)\b", "frontend-developer"),
     ("backend", r"\b(api|endpoint|service|server|controller|middleware|route|handler|rest|graphql)\b", "backend-developer"),
@@ -224,10 +265,18 @@ _ROLE_LABELS: dict[str, str] = {
     "technical-writer": "documentation",
     "architect-reviewer": "architecture",
     "fullstack-developer": "integration",
+    "mobile-developer": "mobile layer",
+    "data-engineer": "data pipeline",
 }
 
 
-def _domain_roles(t: str) -> list[tuple[str, str]]:
+def _is_code_review_only(domains: list[str]) -> bool:
+    return domains == ["code-review"] or set(domains) == {"code-review"}
+
+
+def _domain_roles(t: str, explicit: list[str] | None = None) -> list[tuple[str, str]]:
+    if explicit:
+        return [(d, _EXPLICIT_DOMAIN_ROLE[d]) for d in explicit if d in _EXPLICIT_DOMAIN_ROLE]
     return [(domain, role) for domain, pattern, role in _DOMAIN_ROLE_MAP if re.search(pattern, t)]
 
 
@@ -305,8 +354,70 @@ def _generate_steps(
     return steps
 
 
-def _decompose_internal(task: str, registry: dict) -> "DecomposeResult":
+def _generate_steps_v2(domains: list[str], task: str) -> list[dict]:
+    """Universal MAS structure: PLAN → EXECUTE → REVIEW → DEPLOY(optional)."""
+    step_num = 1
+    steps: list[dict] = []
+    code_review_only = _is_code_review_only(domains)
+
+    if code_review_only:
+        # feedback loop: review → assess — no plan step
+        steps.append({"step": step_num, "role": "code-reviewer", "action": "Review code quality and issues", "parallel": False})
+        step_num += 1
+        steps.append({"step": step_num, "role": "architect-reviewer", "action": "Architectural assessment", "parallel": False})
+        return steps
+
+    # Step 1: PLAN
+    steps.append({"step": step_num, "role": "architect-reviewer", "action": "Create implementation plan", "parallel": False})
+    step_num += 1
+
+    # Step 2+: EXECUTE (exclude architecture/code-review/devops — handled separately)
+    execute_domains = [d for d in domains if d not in ("architecture", "code-review", "devops")]
+
+    # ML ordering: data before ml
+    ordered: list[str] = []
+    if "ml" in execute_domains and "data" in execute_domains:
+        ordered = [d for d in execute_domains if d not in ("ml", "data")] + ["data", "ml"]
+    else:
+        ordered = execute_domains
+
+    is_parallel = len(ordered) >= 3
+    for domain in ordered:
+        role = _EXPLICIT_DOMAIN_ROLE.get(domain, "backend-developer")
+        label = _ROLE_LABELS.get(role, domain)
+        steps.append({"step": step_num, "role": role, "action": f"Implement {label}", "parallel": is_parallel})
+        step_num += 1
+
+    if is_parallel:
+        steps.append({"step": step_num, "role": "fullstack-developer", "action": "Integration and wiring", "parallel": False})
+        step_num += 1
+
+    # Step N: REVIEW
+    reviewer = "architect-reviewer" if "architecture" in domains else "code-reviewer"
+    steps.append({"step": step_num, "role": reviewer, "action": "Review output", "parallel": False})
+    step_num += 1
+
+    # Step N+1: DEPLOY PLAN (only if devops)
+    if "devops" in domains:
+        steps.append({"step": step_num, "role": "cloud-architect", "action": "Write deployment plan", "parallel": False})
+
+    return steps
+
+
+def _decompose_internal(task: str, registry: dict, explicit_domains: list[str] | None = None) -> "DecomposeResult":
     t = task.lower()
+
+    if explicit_domains:
+        steps = _generate_steps_v2(explicit_domains, task)
+        if _is_code_review_only(explicit_domains):
+            pattern = PATTERN_FEEDBACK_LOOP
+        elif len([d for d in explicit_domains if d not in ("architecture", "code-review", "devops")]) >= 3:
+            pattern = PATTERN_PARALLEL
+        else:
+            pattern = PATTERN_PIPELINE
+        dr = _domain_roles(t, explicit=explicit_domains)
+        return DecomposeResult(pattern=pattern, steps=steps, domain_roles=dr)
+
     imp_verbs = set(re.findall(
         r"\b(build|create|implement|deploy|test|review|refactor|migrate|audit|"
         r"integrate|add|fix|debug|analyze|design|update|remove|configure|write|generate)\b", t
@@ -319,10 +430,10 @@ def _decompose_internal(task: str, registry: dict) -> "DecomposeResult":
     return DecomposeResult(pattern=pattern, steps=steps, domain_roles=dr)
 
 
-def decompose(task: str, custom_registry: str | None = None) -> "DecomposeResult":
+def decompose(task: str, custom_registry: str | None = None, domains: list[str] | None = None) -> "DecomposeResult":
     """Detect orchestration pattern and generate skeleton steps for a multi-agent task."""
     registry = load_registry(custom_registry)
-    return _decompose_internal(task, registry)
+    return _decompose_internal(task, registry, explicit_domains=domains)
 
 
 def _suggest_role(t: str, imp_verbs: set[str], registry: dict[str, Agent]) -> str:

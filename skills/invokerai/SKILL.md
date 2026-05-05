@@ -1,11 +1,11 @@
 ---
 name: invokerai
-description: Agent routing brain — given a task, returns the optimal specialist agent, routing decision, and tools list. Call before spawning any agent. Auto-configures if not present.
+description: Agent routing brain — given a task and domains, returns the optimal specialist agent, MAS execution plan, and spawn authorization. Call before spawning any agent. Auto-configures if not present.
 ---
 
 # InvokerAI — Agent Router
 
-InvokerAI routes tasks to the right specialist using a deterministic + ML classifier. It returns the agent role, routing decision (direct/orchestrate), confidence score, and tools list.
+InvokerAI routes tasks to specialist agents using a deterministic + ML classifier. Pass explicit `domains[]` for accurate MAS step generation. Always returns spawn authorization, execution steps, and persona bundle.
 
 ## Setup (run first)
 
@@ -24,35 +24,69 @@ invoker setup
 
 ## When to use
 
-Always call `mcp__invokerai__route_task` before spawning an agent:
+**PRIMARY SURFACE:** Always call `mcp__invokerai__spawn_specialist` before spawning any agent.
+
+**Step 1 — Identify domains** (pick 1–N that apply):
+`architecture` | `backend` | `frontend` | `database` | `devops` | `security`
+`ml` | `testing` | `documentation` | `mobile` | `data` | `code-review`
+
+**Step 2 — Call spawn_specialist:**
 
 ```
-mcp__invokerai__route_task(task="fix the null check in auth middleware")
+mcp__invokerai__spawn_specialist(
+    task="build a REST API with auth and tests",
+    domains=["backend", "security", "testing"]
+)
 → {
-    "routing": "direct",
-    "role": "debugger",
-    "confidence": 91,
-    "tools": ["Read", "Bash", "Grep", "Edit", "mcp__lean-ctx__ctx_read", ...]
+    "routing": "orchestrate",
+    "pattern": "pipeline",
+    "spawn_count": 4,
+    "spawn_authorized": true,
+    "steps": [
+      {"step": 1, "role": "architect-reviewer", "action": "Create implementation plan"},
+      {"step": 2, "role": "backend-developer", "action": "Implement API layer"},
+      {"step": 3, "role": "code-reviewer", "action": "Security review"},
+      {"step": 4, "role": "test-automator", "action": "Implement test suite"},
+      {"step": 5, "role": "code-reviewer", "action": "Review output"}
+    ]
   }
 ```
 
+## MAS step structure
+
+Every orchestrate result follows: **PLAN → EXECUTE → REVIEW → DEPLOY PLAN** (deploy only if devops domain).
+
+| Step | Role | Condition |
+|------|------|-----------|
+| Plan | `architect-reviewer` | Always first (except code-review-only) |
+| Execute | domain specialists | Sequential (1–2 domains) or parallel (3+) |
+| Review | `architect-reviewer` or `code-reviewer` | Always last execute step |
+| Deploy plan | `cloud-architect` | Only if `devops` in domains |
+
 ## Routing rules
+
+Every result returns `routing == "orchestrate"` with a `steps` array — always spawn from steps.
 
 | Result | Action |
 |--------|--------|
-| `routing == "direct"` | Spawn `role` agent with returned `tools` |
-| `routing == "orchestrate"` | Use multi-agent coordination |
+| `routing == "orchestrate"` | Spawn each step in `steps` array; parallel where `parallel: true` |
 | `confidence < 50` | Ask user to clarify before routing |
-| `role == null` + orchestrate | Decompose task, assign roles per sub-task |
 
-## CLI (direct use)
+## Planner role
+
+You are **orchestrator/planner only**. Never write code. Never implement directly.
+Your job: plan, decompose, identify domains, call spawn_specialist, coordinate execution.
+
+## Skill bypass
+
+When running inside a skill invocation (/graphify, /kyoko, /hyperframes, /remotion, /weave, etc.),
+do NOT call mcp__invokerai__spawn_specialist. Skills manage their own agent spawning.
+
+## CLI utilities
 
 ```bash
-# Route a task
-invoker "fix the null check in auth middleware"
-
-# Use custom agent registry
-invoker --registry ./my-agents.json "deploy the api"
+# Router status
+invoker --model-info
 
 # Bulk add tools to all agents
 invoker tools add --all mcp__lean-ctx__ctx_read mcp__lean-ctx__ctx_shell
@@ -60,14 +94,8 @@ invoker tools add --all mcp__lean-ctx__ctx_read mcp__lean-ctx__ctx_shell
 # Add tools to a category
 invoker tools add --category backend WebSearch WebFetch
 
-# Remove tools from specific agents
-invoker tools remove --agents debugger,code-reviewer some_tool
-
 # List tools for an agent
 invoker tools list debugger
-
-# Router status
-invoker --model-info
 ```
 
 ## Build router (required for ML routing)
@@ -80,8 +108,6 @@ python scripts/build_router.py --phase 2  # Phase 2: mpnet + RandomForest
 Phase 2 requires: `pip install agent-invoker[embeddings]`
 
 ## Custom agents
-
-Add agents without touching the default registry:
 
 ```json
 {

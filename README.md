@@ -77,53 +77,15 @@ InvokerAI scans what you have installed and wires everything up:
 
 No config file to edit. No hook to write. Restart your editor. Routing is live.
 
-Migrating from v0.1.0? Run `invoker migrate` instead — it swaps out the old echo hooks (real talk: Claude just ignored them anyway), rewrites MCP entries, and patches your CLAUDE.md. Idempotent. Run it twice if you feel like it.
-
 ---
 
 ## What happens next
 
 Nothing you have to do. That's the thing.
 
-You type your task. Claude intercepts it, routes it, adopts the right persona, and gets to work — all before the first tool call. You just get a backend engineer when you need a backend engineer.
+You type your task. Claude identifies the relevant domains, calls `mcp__invokerai__spawn_specialist`, and hands execution to the right specialist — all before any code gets written. You just get a backend engineer when you need one.
 
-Here's what's happening under the hood when you type "refactor the payment gateway to async/await":
-
-```
-UserPromptSubmit hook fires
-  → routing reminder injected into Claude's context
-
-Claude runs: invoker spawn "refactor the payment gateway to async/await" --persona
-  → backend-developer (91% confidence)
-  → spawn token written
-  → system_prompt_fragment loaded: "You are a senior backend engineer..."
-
-Claude adopts the persona. Starts work.
-
-If Claude tries to spawn a subagent:
-  PreToolUse[Agent] hook fires
-    → checks for valid spawn token (age < 30s)
-    → token found? Agent call goes through.
-    → no token? Agent call is blocked. Hard.
-```
-
-The JSON Claude actually sees:
-
-```json
-{
-  "routing": "direct",
-  "role": "backend-developer",
-  "confidence": 91,
-  "tools": ["Read", "Write", "Edit", "Bash"],
-  "spawn_authorized": true,
-  "persona": {
-    "resource_uri": "agent://backend-developer",
-    "system_prompt_fragment": "You are a senior backend engineer..."
-  }
-}
-```
-
-Want to see exactly what Claude gets? Run `invoker spawn "your task" --persona` in your terminal anytime.
+For "refactor the payment gateway to async/await", InvokerAI returns the specialist with that context. There's also a gate that ensures no Agent call bypasses routing.
 
 ---
 
@@ -147,22 +109,12 @@ invoker decompose "build the react frontend, implement the api, migrate postgres
 ```
 
 ```json
-{
-  "pattern": "hierarchical",
-  "steps": [
-    { "step": 1, "role": "architect-reviewer",  "action": "Top-level decomposition",  "parallel": false },
-    { "step": 2, "role": "frontend-developer",  "action": "Lead UI layer cluster",    "parallel": false },
-    { "step": 3, "role": "backend-developer",   "action": "Lead API layer cluster",   "parallel": true  },
-    { "step": 4, "role": "database-optimizer",  "action": "Lead data layer cluster",  "parallel": true  },
-    { "step": 5, "role": "architect-reviewer",  "action": "Final integration review", "parallel": false }
-  ],
   "domain_roles": [
     { "domain": "frontend", "role": "frontend-developer" },
     { "domain": "backend",  "role": "backend-developer"  },
     { "domain": "database", "role": "database-optimizer" },
     { "domain": "devops",   "role": "cloud-architect"    }
   ]
-}
 ```
 
 Right shape, right roles, right execution order. `parallel: true` flags what can fire simultaneously. Claude reads this and orchestrates from there.
@@ -171,7 +123,7 @@ Right shape, right roles, right execution order. `parallel: true` flags what can
 
 ## How enforcement actually works
 
-This is worth understanding. The old version used echo hooks that Claude just... read and moved on from. Not anymore.
+This is worth understanding. This is where the fun starts.
 
 ```
 User submits prompt
@@ -180,7 +132,7 @@ User submits prompt
 UserPromptSubmit hook ─── injects routing reminder into context
         │
         ▼
-Claude runs `invoker spawn "task" --persona` before doing anything
+Claude calls `mcp__invokerai__spawn_specialist(task, domains=[...])` before doing anything
         │
         ▼
 PreToolUse[Agent] → ~/.invokerai/hooks/pre-agent.sh
@@ -197,7 +149,7 @@ PreToolUse[Agent] → ~/.invokerai/hooks/pre-agent.sh
         │
         ▼
 SubagentStart hook ──── spawned agent runs:
-                        `invoker confirm "TASK" "ROLE"` on first turn
+                        `mcp__invokerai__confirm_route(task, expected_role)` on first turn
                         Self-corrects if the classifier disagrees.
 ```
 
@@ -245,17 +197,16 @@ invoker tools list AGENT_ID                       List tools for an agent
 
 ### Routing commands
 
-These are what Claude calls automatically via the installed hooks. Run them yourself to debug or see what Claude sees:
+These are for debugging — see exactly what the router returns:
 
 ```
-invoker spawn "task" --persona               Route + spawn token + system_prompt_fragment
-invoker spawn "task"                         Route + spawn token (no persona blob)
-invoker confirm "task" "expected-role"       Subagent self-check / self-correction
-invoker decompose "task"                     MAS pattern + skeleton steps
 invoker "task text"                          Route only (no token)
 invoker --registry PATH "task text"          Use custom agent registry
 invoker --no-log "task text"                 Skip logging
+invoker decompose "task"                     MAS pattern + skeleton steps
 ```
+
+Primary surface for Agent/MCP: `mcp__invokerai__spawn_specialist(task, domains=[...])`
 
 ---
 
@@ -306,25 +257,6 @@ Registry format:
   ]
 }
 ```
-
----
-
-## Migrating from v0.1.0
-
-```bash
-python migrate.py
-# or
-invoker migrate
-```
-
-What it does:
-- Removes old `mcp__invokerai__route_task` echo hooks
-- Installs `~/.invokerai/hooks/pre-agent.sh`
-- Rewrites MCP entries to venv-first detection
-- Updates CLAUDE.md to blocking-requirement language
-- Adds Kiro hooks
-
-Idempotent. Run it twice if you want.
 
 ---
 

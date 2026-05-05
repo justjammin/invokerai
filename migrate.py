@@ -29,6 +29,10 @@ _OLD_HOOK_MARKERS = [
     "mcp__invokerai__route_task",          # old prompt/agent echo hooks
     "REQUIRED: call mcp__invokerai",       # old agent hook text
     "confirm correct specialist",          # old subagent hook text
+    "invoker spawn TASK (CLI",             # old CLI-preferred prompt hook
+    "invoker spawn TASK --persona",        # old CLI-preferred subagent hook
+    "invoker confirm TASK ROLE",           # old CLI confirm subagent hook
+    "CLI-first",                           # old CLI-first marker
 ]
 
 # Hooks that have the right marker content but are missing hookEventName — handled
