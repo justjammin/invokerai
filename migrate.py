@@ -83,7 +83,7 @@ def _purge_old_hooks(settings: dict) -> int:
 def migrate_claude_code(pkg_dir: Path) -> None:
     from agent_invoker.setup_editors import (
         _mcp_entry, _inject_agent_hook, _inject_subagent_hook,
-        _inject_prompt_hook, _HOOK_SCRIPT_PATH,
+        _inject_prompt_hook, _HOOK_SCRIPT_PATH, _INVOKERAI_AUTO_APPROVE,
     )
 
     claude_json_path = Path.home() / ".claude.json"
@@ -102,7 +102,7 @@ def migrate_claude_code(pkg_dir: Path) -> None:
             claude_json = {}
 
     claude_json.setdefault("mcpServers", {})
-    new_entry = _mcp_entry(pkg_dir)
+    new_entry = {**_mcp_entry(pkg_dir), "autoApprove": _INVOKERAI_AUTO_APPROVE}
     old_entry = claude_json["mcpServers"].get("invokerai")
     if old_entry != new_entry:
         claude_json["mcpServers"]["invokerai"] = new_entry

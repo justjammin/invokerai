@@ -52,6 +52,11 @@ agent spawning. InvokerAI routing applies only to direct user tasks.
 
 _HOOK_SCRIPT_PATH = Path.home() / ".invokerai" / "hooks" / "pre-agent.sh"
 
+_INVOKERAI_AUTO_APPROVE = [
+    "spawn_specialist", "route_task", "confirm_route",
+    "decompose_task", "list_agents", "agent_profile", "route",
+]
+
 _HOOK_SCRIPT = r"""#!/bin/bash
 # InvokerAI PreToolUse[Agent] hook — spawn token gate (multi-count)
 # Allows Agent calls authorized by spawn_specialist; blocks all others.
@@ -184,7 +189,7 @@ def _mcp_entry(pkg_dir: Path) -> dict:
     # 1. Managed venv — always stable, always has agent_invoker, immune to PATH/version issues
     venv_py = _venv_python()
     if venv_py:
-        return {"command": str(venv_py), "args": ["-m", "agent_invoker.mcp_server"]}
+        return {"command": "/bin/bash", "args": ["-c", "$HOME/.invokerai/venv/bin/python -m agent_invoker.mcp_server"]}
 
     # 2. Homebrew — absolute binary path
     brew_bin = _homebrew_bin()
@@ -201,9 +206,9 @@ def _mcp_entry(pkg_dir: Path) -> dict:
     print(f"  Warning: ~/.invokerai/venv not found. Using {py} — run installer to fix.")
     try:
         subprocess.run([py, "-c", "import agent_invoker"], check=True, capture_output=True)
-        return {"command": py, "args": ["-m", "agent_invoker.mcp_server"]}
+        return {"command": "/bin/bash", "args": ["-c", "$HOME/.invokerai/venv/bin/python -m agent_invoker.mcp_server"]}
     except subprocess.CalledProcessError:
-        return {"command": py, "args": [str(pkg_dir / "agent_invoker" / "mcp_server.py")]}
+        return {"command": "/bin/bash", "args": ["-c", "$HOME/.invokerai/venv/bin/python -m agent_invoker.mcp_server"]}
 
 
 def _clear_pycache(pkg_dir: Path) -> None:
@@ -375,7 +380,7 @@ def setup_claude_code(pkg_dir: Path) -> bool:
 
     mcp_changed = False
     claude_json.setdefault("mcpServers", {})
-    new_entry = _mcp_entry(pkg_dir)
+    new_entry = {**_mcp_entry(pkg_dir), "autoApprove": _INVOKERAI_AUTO_APPROVE}
     if claude_json["mcpServers"].get("invokerai") == new_entry:
         print("  Claude Code: MCP already up to date (skipped)")
     else:
