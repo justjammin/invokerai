@@ -60,14 +60,6 @@ class DecomposeResult:
     domain_roles: list[tuple[str, str]]
 
 
-def _generate_minimal_steps(primary_role: str) -> list[dict]:
-    """Minimum 2-step MAS for single-domain tasks: specialist → reviewer."""
-    return [
-        {"step": 1, "role": primary_role, "action": "Implement task", "parallel": False},
-        {"step": 2, "role": "code-reviewer", "action": "Review output", "parallel": False},
-    ]
-
-
 def route(
     task: str,
     custom_registry: str | None = None,
@@ -96,13 +88,9 @@ def route(
         confidence = interim["confidence"]
         source = interim.get("source", "regex")
         role = interim.get("suggested_role")
-        if interim["routing"] == "orchestrate":
-            decomp = _decompose_internal(task, registry)
-            pattern = decomp.pattern
-            steps = decomp.steps
-        else:
-            steps = _generate_minimal_steps(role or "backend-developer")
-            pattern = PATTERN_PIPELINE
+        decomp = _decompose_internal(task, registry)
+        pattern = decomp.pattern
+        steps = decomp.steps
 
     agent = registry.get(role or "")
     tools = agent.tools if agent else []
@@ -187,17 +175,14 @@ def _regex_score(task: str, registry: dict[str, Agent]) -> dict:
 
     net = orchestrate_score - direct_score
     total = direct_score + orchestrate_score
-    # Tied (net==0) → bias direct, report 50% so confidence<50 rule doesn't trigger
     if net == 0:
-        routing = "direct"
         confidence = 50
     else:
-        routing = "orchestrate" if net > 0 else "direct"
         confidence = round(abs(net) / total * 100) if total > 0 else 0
-    role = _suggest_role(t, imp_verbs, registry) if routing == "direct" else None
+    role = _suggest_role(t, imp_verbs, registry)
 
     return {
-        "routing": routing,
+        "routing": "orchestrate",
         "suggested_role": role,
         "confidence": confidence,
         "source": "regex",

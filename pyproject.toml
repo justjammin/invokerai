@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
     "scikit-learn>=1.4",
     "fastmcp>=0.9",
+    "psutil>=5.9",
 ]
 
 [project.optional-dependencies]

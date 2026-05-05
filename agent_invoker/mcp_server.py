@@ -110,9 +110,8 @@ def spawn_specialist(
     }
     if result.persona:
         out["persona"] = result.persona
-    if result.routing == "orchestrate":
-        out["pattern"] = result.pattern
-        out["steps"] = result.steps
+    out["pattern"] = result.pattern
+    out["steps"] = result.steps
     return out
 
 
@@ -145,9 +144,8 @@ def route_task(
     }
     if result.persona:
         out["persona"] = result.persona
-    if result.routing == "orchestrate":
-        out["pattern"] = result.pattern
-        out["steps"] = result.steps
+    out["pattern"] = result.pattern
+    out["steps"] = result.steps
     return out
 
 
