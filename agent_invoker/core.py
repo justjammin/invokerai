@@ -11,32 +11,140 @@ from agent_invoker import classifier
 
 LOG_PATH = Path.home() / ".invokerai" / "routing_log.jsonl"
 _AGENTS_DIR = Path.home() / ".claude" / "agents"
+_REPO_AGENTS_DIR = Path(__file__).parent.parent / "agents"
+
+_ROLE_DOMAIN: dict[str, str] = {
+    "backend-developer": "backend",
+    "fullstack-developer": "backend",
+    "fastapi-developer": "backend",
+    "django-developer": "backend",
+    "laravel-specialist": "backend",
+    "symfony-specialist": "backend",
+    "python-pro": "backend",
+    "php-pro": "backend",
+    "golang-pro": "backend",
+    "javascript-pro": "backend",
+    "typescript-pro": "backend",
+    "mcp-developer": "backend",
+    "frontend-developer": "frontend",
+    "react-specialist": "frontend",
+    "ui-designer": "frontend",
+    "database-optimizer": "database",
+    "database-administrator": "database",
+    "postgres-pro": "database",
+    "data-engineer": "data",
+    "data-analyst": "data",
+    "cloud-architect": "devops",
+    "kubernetes-specialist": "devops",
+    "git-workflow-manager": "devops",
+    "dx-optimizer": "devops",
+    "code-reviewer": "code-review",
+    "refactoring-specialist": "code-review",
+    "legacy-modernizer": "code-review",
+    "ml-engineer": "ml",
+    "machine-learning-engineer": "ml",
+    "llm-architect": "ml",
+    "data-scientist": "ml",
+    "test-automator": "testing",
+    "technical-writer": "documentation",
+    "documentation-engineer": "documentation",
+    "readme-generator": "documentation",
+    "mobile-developer": "mobile",
+    "mobile-app-developer": "mobile",
+    "expo-react-native-expert": "mobile",
+    "swift-expert": "mobile",
+    "architect-reviewer": "architecture",
+    "microservices-architect": "architecture",
+    "api-designer": "architecture",
+}
+
+_SUBDOMAIN_TRIGGERS: list[tuple[str, str, list[str]]] = [
+    ("backend", "python", ["python", "fastapi", "django", "flask", "asyncio", "pydantic", ".py"]),
+    ("backend", "php", ["php", "laravel", "symfony", "composer", "artisan", "eloquent"]),
+    ("backend", "go", ["golang", " go ", "goroutine", "gin framework", "fiber framework"]),
+    ("backend", "node", ["node.js", "nodejs", "express", "koa", "hapi"]),
+    ("backend", "typescript", ["typescript", " ts ", ".ts ", "tsconfig"]),
+    ("frontend", "react", ["react", "jsx", "tsx", "hooks", "zustand", "redux"]),
+    ("frontend", "typescript", ["typescript", " ts ", ".tsx", "tsconfig"]),
+    ("database", "postgres", ["postgres", "postgresql", "pg_", "pgbouncer", "vacuum"]),
+    ("devops", "kubernetes", ["kubernetes", "k8s", "helm", "kubectl", "pod ", "deployment yaml"]),
+    ("devops", "git", ["git ", "branch", "rebase", "merge strategy", "git flow", "trunk"]),
+    ("mobile", "react-native", ["react native", "react-native", "expo", "rn "]),
+    ("mobile", "swift", ["swift", "swiftui", "uikit", "xcode", "ios ", "macos app"]),
+    ("ml", "llm", ["llm", "rag", "prompt", "embedding", "langchain", "langgraph", "openai", "anthropic"]),
+    ("ml", "training", ["pytorch", "tensorflow", "sklearn", "model training", "fine-tun", "checkpoint"]),
+]
+
+_TIER3_TRIGGERS: list[tuple[str, str, str, list[str]]] = [
+    ("backend", "python", "fastapi", ["fastapi", "asgi", "uvicorn", "starlette"]),
+    ("backend", "python", "django", ["django", "drf", "django rest", "django orm"]),
+    ("backend", "php", "laravel", ["laravel", "eloquent", "artisan", "livewire", "blade"]),
+    ("backend", "php", "symfony", ["symfony", "doctrine", "twig", "messenger", "api platform"]),
+    ("mobile", "react-native", "expo", ["expo", "eas build", "eas ", "expo-updates", "expo-modules"]),
+]
 
 
-def _load_persona(role: str) -> dict:
-    """Read persona from ~/.claude/agents/{role}.md — body after frontmatter is system_prompt_fragment.
-
-    Falls back to the repo's agents/ directory when the user-installed file is missing
-    (e.g. during development before 'invoker setup' has been run).
-    """
-    agent_file = _AGENTS_DIR / f"{role}.md"
-    if not agent_file.exists():
-        # Dev fallback: agents/ directory at repo root (sibling of agent_invoker/)
-        repo_agents = Path(__file__).parent.parent / "agents" / f"{role}.md"
-        if repo_agents.exists():
-            agent_file = repo_agents
-        else:
-            return {"resource_uri": f"agent://{role}"}
-    content = agent_file.read_text(encoding="utf-8")
-    body = content
+def _read_agent_body(path: Path) -> str:
+    content = path.read_text(encoding="utf-8")
     if content.startswith("---"):
         end = content.find("\n---", 3)
         if end != -1:
-            body = content[end + 4:].strip()
-    return {
-        "resource_uri": f"agent://{role}",
-        "system_prompt_fragment": body[:2000],
-    }
+            return content[end + 4:].strip()
+    return content
+
+
+def _resolve_agent_file(relative: str) -> "Path | None":
+    for base in (_AGENTS_DIR, _REPO_AGENTS_DIR):
+        candidate = base / relative
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _load_persona(role: str, task: str = "") -> dict:
+    domain = _ROLE_DOMAIN.get(role)
+    t = task.lower()
+    tiers: list[str] = []
+
+    if domain:
+        tier1_file = _resolve_agent_file(f"{domain}.md")
+        if tier1_file:
+            tiers.append(_read_agent_body(tier1_file))
+
+            subdomain: str | None = None
+            for d, sub, keywords in _SUBDOMAIN_TRIGGERS:
+                if d == domain and any(kw in t for kw in keywords):
+                    subdomain = sub
+                    break
+
+            if subdomain:
+                tier2_file = _resolve_agent_file(f"{domain}/{subdomain}.md")
+                if tier2_file:
+                    tiers.append(_read_agent_body(tier2_file))
+
+                    for d, sub, specialist, keywords in _TIER3_TRIGGERS:
+                        if d == domain and sub == subdomain and any(kw in t for kw in keywords):
+                            tier3_file = _resolve_agent_file(f"{domain}/{subdomain}/{specialist}.md")
+                            if tier3_file:
+                                tiers.append(_read_agent_body(tier3_file))
+                            break
+
+    if tiers:
+        composed = "\n\n---\n\n".join(tiers)
+        return {
+            "resource_uri": f"agent://{role}",
+            "system_prompt_fragment": composed[:6000],
+        }
+
+    # Flat-file fallback (old naming convention)
+    flat_file = _resolve_agent_file(f"{role}.md")
+    if flat_file:
+        return {
+            "resource_uri": f"agent://{role}",
+            "system_prompt_fragment": _read_agent_body(flat_file)[:6000],
+        }
+
+    return {"resource_uri": f"agent://{role}"}
 
 
 @dataclass
@@ -102,7 +210,7 @@ def route(
         tools=tools,
         source=source,
         agent=agent,
-        persona=_load_persona(role) if role else {},
+        persona=_load_persona(role, task) if role else {},
         pattern=pattern,
         steps=steps,
         spawn_count=len(steps),
