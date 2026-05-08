@@ -93,7 +93,6 @@ class TestRoute:
             assert "resource_uri" in r.persona
 
     def test_persona_absent_when_no_role(self):
-        # Patch to force no role
         with patch("agent_invoker.core._suggest_role", return_value=None), \
              patch("agent_invoker.core._regex_score", return_value={
                  "routing": "orchestrate", "suggested_role": None,
@@ -135,5 +134,4 @@ class TestLoadPersona:
     def test_fragment_strips_frontmatter(self):
         result = _load_persona("debugger")
         if "system_prompt_fragment" in result:
-            # Body should not start with --- frontmatter
             assert not result["system_prompt_fragment"].startswith("---")

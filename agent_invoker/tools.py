@@ -49,7 +49,6 @@ def remove_tools(
     agents_dir: Path = DEFAULT_AGENTS_DIR,
     registry_path: Path = DEFAULT_REGISTRY,
 ) -> dict[str, list[str]]:
-    """Remove tools from matching agents."""
     return _apply(targets, tools, mode="remove", agents_dir=agents_dir, registry_path=registry_path)
 
 
@@ -75,7 +74,7 @@ def _apply(
     registry_path: Path,
 ) -> dict[str, list[str]]:
     agent_ids = _resolve_targets(targets, agents_dir, registry_path)
-    results: dict[str, list[str]] = {}
+    results = {}
 
     registry = _load_registry(registry_path)
 

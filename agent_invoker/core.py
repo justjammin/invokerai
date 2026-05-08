@@ -155,7 +155,7 @@ def _load_persona(role: str, task: str = "") -> dict:
         composed = "\n\n---\n\n".join(tiers)
         return {
             "resource_uri": f"agent://{role}",
-            "system_prompt_fragment": composed[:6000],
+            "system_prompt_fragment": composed[:2000],
         }
 
     # Flat-file fallback (old naming convention)
@@ -163,7 +163,7 @@ def _load_persona(role: str, task: str = "") -> dict:
     if flat_file:
         return {
             "resource_uri": f"agent://{role}",
-            "system_prompt_fragment": _read_agent_body(flat_file)[:6000],
+            "system_prompt_fragment": _read_agent_body(flat_file)[:2000],
         }
 
     return {"resource_uri": f"agent://{role}"}
@@ -223,7 +223,6 @@ def route(
         confidence = interim["confidence"]
         source = interim.get("source", "regex")
 
-        # Collect all registry matches sorted by category priority
         matches = _collect_matches(task, registry)
         if matches:
             role = matches[0]["role"]
@@ -234,7 +233,6 @@ def route(
         pattern = decomp.pattern
         steps = decomp.steps
 
-        # Determine routing from match spread unless ML already set it
         if not ml_determined_routing:
             if len(matches) >= 2:
                 categories = {m["category"] for m in matches}
@@ -271,22 +269,18 @@ def _regex_score(task: str, registry: dict[str, Agent]) -> dict:
     direct_score = 0
     orchestrate_score = 0
 
-    # Single vs multi-sentence
     sentences = [s.strip() for s in re.split(r"[!?]|\.\s+", task) if s.strip()]
     if len(sentences) == 1:
         direct_score += 2
     elif len(sentences) >= 3:
         orchestrate_score += 1
 
-    # Question form → direct
     if re.match(r"^\s*(what|how|why|where|when|is|are|does|can|should)\b", t):
         direct_score += 2
 
-    # Multi-step connectors → orchestrate
     if re.search(r"\b(and then|after that|additionally|step \d|first.{0,5}then|once that)\b", t):
         orchestrate_score += 2
 
-    # Imperative verb count
     imp_verbs = set(re.findall(
         r"\b(build|create|implement|deploy|test|review|refactor|migrate|audit|"
         r"integrate|add|fix|debug|analyze|design|update|remove|configure|write|generate)\b", t
@@ -294,7 +288,6 @@ def _regex_score(task: str, registry: dict[str, Agent]) -> dict:
     extra = max(0, len(imp_verbs) - 1)
     orchestrate_score += min(3, extra)
 
-    # Domain breadth
     domain_hits = _count_domains(t)
     if domain_hits >= 3:
         orchestrate_score += 4
@@ -305,23 +298,18 @@ def _regex_score(task: str, registry: dict[str, Agent]) -> dict:
     else:
         direct_score += 1
 
-    # File path = concrete = direct
     if re.search(r"[\w/\-]+\.\w{2,5}(?:\s|:|$|,)", task):
         direct_score += 2
 
-    # Read-only intent
     if re.search(r"\b(list|show|explain|read|check|view|describe|what is|how does|find|search)\b", t):
         direct_score += 2
 
-    # Quick modifier
     if re.search(r"\b(just|quick|simple|small|minor|single|only)\b", t):
         direct_score += 2
 
-    # Thoroughness
     if re.search(r"\b(thorough|complete|full|entire|comprehensive|end.to.end|all of)\b", t):
         orchestrate_score += 2
 
-    # Multi-role implied
     if re.search(r"\b(then test|and review|plus document|also review|with tests|with docs|and deploy)\b", t):
         orchestrate_score += 2
 
@@ -334,7 +322,7 @@ def _regex_score(task: str, registry: dict[str, Agent]) -> dict:
     role = _suggest_role(t, imp_verbs, registry)
 
     return {
-        "routing": "orchestrate",
+        "routing": "orchestrate" if net > 0 else "direct",
         "suggested_role": role,
         "confidence": confidence,
         "source": "regex",
@@ -509,7 +497,6 @@ def _generate_steps(
         steps.append({"step": len(steps) + 1, "role": "architect-reviewer", "action": "Final integration review", "parallel": False})
         return steps
 
-    # PIPELINE (default) — ordered sequential
     steps = []
     for i, (domain, role) in enumerate(fallback[:5], start=1):
         label = _ROLE_LABELS.get(role, domain or "task")
@@ -636,7 +623,6 @@ def _collect_matches(task: str, registry: dict[str, Agent]) -> list[dict]:
 
 
 def _suggest_role(t: str, imp_verbs: set[str], registry: dict[str, Agent]) -> str:
-    # Error signals — check first
     if re.search(r"\b(typeerror|valueerror|exception|traceback|500|undefined is not|cannot read)\b", t):
         if re.search(r"\b(correlate|across service|pattern|root cause.*multiple)\b", t):
             return "error-detective"
@@ -669,7 +655,6 @@ def _suggest_role(t: str, imp_verbs: set[str], registry: dict[str, Agent]) -> st
     if re.search(r"\b(deploy|docker|kubernetes|k8s|terraform|cloud|aws|gcp|azure)\b", t):
         return "cloud-architect"
 
-    # Trigger matching against registry
     for agent in registry.values():
         if agent.orchestrate:
             continue

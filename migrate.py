@@ -45,9 +45,6 @@ _STALE_MISSING_HOOK_EVENT_NAME_MARKERS = [
 _OLD_CLAUDE_MD_MARKER_START = "<!-- INVOKERAI-START -->"
 _OLD_CLAUDE_MD_MARKER_END = "<!-- INVOKERAI-END -->"
 
-# ── load current setup_editors state ─────────────────────────────────────────
-
-
 # ── hook purge helpers ────────────────────────────────────────────────────────
 
 def _is_old_hook(hook: dict) -> bool:

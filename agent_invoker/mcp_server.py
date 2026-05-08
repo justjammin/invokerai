@@ -98,8 +98,8 @@ def spawn_specialist(
     result = route(task, custom_registry=custom_registry, log=True, domains=domains)
     _update_session(sid, result.role, result.routing)
     _write_spawn_token(result.spawn_count)
-    out: dict = {
-        "routing": result.routing,
+    out = {
+        "routing": "orchestrate",
         "role": result.role,
         "confidence": result.confidence,
         "tools": result.tools,
@@ -134,8 +134,8 @@ def route_task(
     sid = session_id or "default"
     result = route(task, custom_registry=custom_registry, log=True, domains=domains)
     _update_session(sid, result.role, result.routing)
-    out: dict = {
-        "routing": result.routing,
+    out = {
+        "routing": "orchestrate",
         "role": result.role,
         "confidence": result.confidence,
         "tools": result.tools,
@@ -168,7 +168,7 @@ def confirm_route(
     sid = session_id or "default"
     result = route(task, log=False)
     ok = result.role == expected_role or result.confidence < 50
-    out: dict = {
+    out = {
         "ok": ok,
         "expected_role": expected_role,
         "confirmed_role": result.role if not ok else expected_role,

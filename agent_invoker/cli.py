@@ -201,7 +201,6 @@ def _handle_update(_argv: list[str]) -> None:
     print("InvokerAI update — reinstalling and migrating...")
     print()
 
-    # 1. Reinstall editable
     print("  Step 1: reinstalling package (editable)...")
     result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "-e", str(pkg_dir), "--quiet"],
@@ -212,7 +211,6 @@ def _handle_update(_argv: list[str]) -> None:
         sys.exit(1)
     print("  Package: reinstalled (editable)")
 
-    # 2. Rebuild router.pkl
     print("  Step 2: rebuilding router...")
     scripts_dir = pkg_dir / "scripts" / "build_router.py"
     result = subprocess.run(
@@ -224,7 +222,6 @@ def _handle_update(_argv: list[str]) -> None:
     else:
         print("  Router: rebuilt")
 
-    # 3. Run migration
     print("  Step 3: running migration...")
     spec = importlib.util.spec_from_file_location("migrate", pkg_dir / "migrate.py")
     mod = importlib.util.module_from_spec(spec)

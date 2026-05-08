@@ -186,22 +186,20 @@ def _venv_python() -> Path | None:
 
 
 def _mcp_entry(pkg_dir: Path) -> dict:
-    # 1. Managed venv — always stable, always has agent_invoker, immune to PATH/version issues
+    # managed venv — immune to PATH/version changes, always has agent_invoker
     venv_py = _venv_python()
     if venv_py:
         return {"command": "/bin/bash", "args": ["-c", "$HOME/.invokerai/venv/bin/python -m agent_invoker.mcp_server"]}
 
-    # 2. Homebrew — absolute binary path
     brew_bin = _homebrew_bin()
     if brew_bin:
         return {"command": str(brew_bin)}
 
-    # 3. npm (nvm / fnm / volta / system) — absolute path
     npm_bin = _npm_bin()
     if npm_bin:
         return {"command": str(npm_bin)}
 
-    # 4. sys.executable last resort — may be wrong interpreter, print warning
+    # last resort — sys.executable may be the wrong interpreter
     py = sys.executable
     print(f"  Warning: ~/.invokerai/venv not found. Using {py} — run installer to fix.")
     try:
