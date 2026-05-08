@@ -33,18 +33,20 @@ def bootstrap_venv() -> None:
     venv_python = VENV_DIR / "bin" / "python"
 
     # Recreate if existing venv was built with a too-old Python
-    if venv_python.exists():
-        probe = subprocess.run(
-            [str(venv_python), "-c", "import sys; print(sys.version_info[:2])"],
-            capture_output=True, text=True,
-        )
-        try:
-            venv_ver = tuple(eval(probe.stdout.strip()))
-            if venv_ver < MIN_PYTHON:
-                print(f"  Venv:    Python {venv_ver} < {MIN_PYTHON} — recreating {VENV_DIR} ...")
-                shutil.rmtree(str(VENV_DIR))
-        except Exception:
-            pass
+    cfg_path = VENV_DIR / "pyvenv.cfg"
+    if cfg_path.exists():
+        venv_ver = None
+        for line in cfg_path.read_text().splitlines():
+            if line.lower().startswith("version"):
+                ver_str = line.split("=", 1)[-1].strip().split(".")
+                try:
+                    venv_ver = (int(ver_str[0]), int(ver_str[1]))
+                except (ValueError, IndexError):
+                    pass
+                break
+        if venv_ver is not None and venv_ver < MIN_PYTHON:
+            print(f"  Venv:    Python {venv_ver} < {MIN_PYTHON} — recreating {VENV_DIR} ...")
+            shutil.rmtree(str(VENV_DIR))
 
     if not venv_python.exists():
         print(f"  Venv:    creating {VENV_DIR} ...")
