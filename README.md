@@ -16,46 +16,10 @@ Extracted from [LENA](https://github.com/justjammin/lena), the AI orchestrator I
 
 ## Install
 
-### npm (Mac / Linux / Windows)
-
-Requires Node 16+ and Python 3.9+.
-
-```bash
-npm install -g invokerai-mcp
-```
-
-First run creates `~/.invokerai/venv`, pip-installs `agent-invoker` into it, then starts the MCP server. Every run after that skips setup and just goes. No activation dance, no `source venv/bin/activate` every session. It finds its own Python.
-
-Want to update the Python package without reinstalling the npm wrapper?
-
-```bash
-invoker-mcp --update
-```
-
-Done.
-
-### Homebrew (Mac / Linux)
-
-```bash
-brew tap justjammin/invokerai
-brew install invokerai
-```
-
-Fully isolated. Ships with its own virtualenv. Nothing touches your system Python.
-
-### Direct install
-
 ```bash
 git clone https://github.com/justjammin/invokerai
 cd invokerai
 python install.py
-```
-
-Or from PyPI:
-
-```bash
-pip install agent-invoker
-invoker setup
 ```
 
 ---
