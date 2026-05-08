@@ -1,7 +1,7 @@
 ---
 name: multi-agent-coordinator
 description: "Use when coordinating multiple concurrent agents that need to communicate, share state, synchronize work, and handle distributed failures across a system."
-tools: Read, Write, Edit, Glob, Grep, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_search, mcp__lean-ctx__ctx_tree, mcp__lean-ctx__ctx_session, mcp__lean-ctx__ctx_knowledge, mcp__lean-ctx__ctx_edit, mcp__lean-ctx__ctx_overview, mcp__lean-ctx__ctx_preload
+tools: Read, Write, Edit, Glob, Grep
 model: opus
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: content-marketer
 description: "Use this agent when you need to develop comprehensive content strategies, create SEO-optimized marketing content, or execute multi-channel content campaigns to drive engagement and conversions. Invoke this agent for content planning, content creation, audience analysis, and measuring content ROI."
-tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_search, mcp__lean-ctx__ctx_tree, mcp__lean-ctx__ctx_session, mcp__lean-ctx__ctx_knowledge, mcp__lean-ctx__ctx_edit, mcp__lean-ctx__ctx_overview, mcp__lean-ctx__ctx_preload
+tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch
 model: haiku
 ---
 

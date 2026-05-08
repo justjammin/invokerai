@@ -1,7 +1,7 @@
 ---
 name: task-distributor
 description: "Use when distributing tasks across multiple agents or workers, managing queues, and balancing workloads to maximize throughput while respecting priorities and deadlines."
-tools: Read, Write, Edit, Glob, Grep, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_search, mcp__lean-ctx__ctx_tree, mcp__lean-ctx__ctx_session, mcp__lean-ctx__ctx_knowledge, mcp__lean-ctx__ctx_edit, mcp__lean-ctx__ctx_overview, mcp__lean-ctx__ctx_preload
+tools: Read, Write, Edit, Glob, Grep
 model: haiku
 ---
 

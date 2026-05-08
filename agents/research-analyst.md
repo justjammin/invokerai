@@ -1,7 +1,7 @@
 ---
 name: research-analyst
 description: "Use this agent when you need comprehensive research across multiple sources with synthesis of findings into actionable insights, trend identification, and detailed reporting."
-tools: Read, Grep, Glob, WebFetch, WebSearch, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_search, mcp__lean-ctx__ctx_tree, mcp__lean-ctx__ctx_session, mcp__lean-ctx__ctx_knowledge, mcp__lean-ctx__ctx_edit, mcp__lean-ctx__ctx_overview, mcp__lean-ctx__ctx_preload
+tools: Read, Grep, Glob, WebFetch, WebSearch
 model: sonnet
 ---
 

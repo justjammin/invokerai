@@ -1,7 +1,7 @@
 ---
 name: trend-analyst
 description: "Use when analyzing emerging patterns, predicting industry shifts, or developing future scenarios to inform strategic planning and competitive positioning."
-tools: Read, Grep, Glob, WebFetch, WebSearch, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_search, mcp__lean-ctx__ctx_tree, mcp__lean-ctx__ctx_session, mcp__lean-ctx__ctx_knowledge, mcp__lean-ctx__ctx_edit, mcp__lean-ctx__ctx_overview, mcp__lean-ctx__ctx_preload
+tools: Read, Grep, Glob, WebFetch, WebSearch
 model: sonnet
 ---
 

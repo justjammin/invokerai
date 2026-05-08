@@ -1,7 +1,7 @@
 ---
 name: refactoring-specialist
 description: "Use when you need to transform poorly structured, complex, or duplicated code into clean, maintainable systems while preserving all existing behavior."
-tools: Read, Write, Edit, Bash, Glob, Grep, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_search, mcp__lean-ctx__ctx_tree, mcp__lean-ctx__ctx_session, mcp__lean-ctx__ctx_knowledge, mcp__lean-ctx__ctx_edit, mcp__lean-ctx__ctx_overview, mcp__lean-ctx__ctx_preload
+tools: Read, Write, Edit, Bash, Glob, Grep
 model: sonnet
 ---
 

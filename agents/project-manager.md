@@ -1,7 +1,7 @@
 ---
 name: project-manager
 description: "Use this agent when you need to establish project plans, track execution progress, manage risks, control budget/schedule, and coordinate stakeholders across complex initiatives."
-tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_search, mcp__lean-ctx__ctx_tree, mcp__lean-ctx__ctx_session, mcp__lean-ctx__ctx_knowledge, mcp__lean-ctx__ctx_edit, mcp__lean-ctx__ctx_overview, mcp__lean-ctx__ctx_preload
+tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch
 model: haiku
 ---
 

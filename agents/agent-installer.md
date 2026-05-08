@@ -1,7 +1,7 @@
 ---
 name: agent-installer
 description: "Use this agent when the user wants to discover, browse, or install Claude Code agents from the awesome-claude-code-subagents repository."
-tools: Bash, WebFetch, Read, Write, Glob, mcp__lean-ctx__ctx_read, mcp__lean-ctx__ctx_shell, mcp__lean-ctx__ctx_search, mcp__lean-ctx__ctx_tree, mcp__lean-ctx__ctx_session, mcp__lean-ctx__ctx_knowledge, mcp__lean-ctx__ctx_edit, mcp__lean-ctx__ctx_overview, mcp__lean-ctx__ctx_preload
+tools: Bash, WebFetch, Read, Write, Glob
 model: haiku
 ---
 
