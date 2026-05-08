@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MIN_PYTHON = (3, 9)
+MIN_PYTHON = (3, 10)
 INVOKERAI_DIR = Path.home() / ".invokerai"
 VENV_DIR = INVOKERAI_DIR / "venv"
 _IN_MANAGED_VENV = os.environ.get("_INVOKERAI_VENV") == "1"
@@ -31,6 +31,21 @@ def bootstrap_venv() -> None:
         return
 
     venv_python = VENV_DIR / "bin" / "python"
+
+    # Recreate if existing venv was built with a too-old Python
+    if venv_python.exists():
+        probe = subprocess.run(
+            [str(venv_python), "-c", "import sys; print(sys.version_info[:2])"],
+            capture_output=True, text=True,
+        )
+        try:
+            venv_ver = tuple(eval(probe.stdout.strip()))
+            if venv_ver < MIN_PYTHON:
+                print(f"  Venv:    Python {venv_ver} < {MIN_PYTHON} — recreating {VENV_DIR} ...")
+                shutil.rmtree(str(VENV_DIR))
+        except Exception:
+            pass
+
     if not venv_python.exists():
         print(f"  Venv:    creating {VENV_DIR} ...")
         subprocess.run([sys.executable, "-m", "venv", str(VENV_DIR)], check=True)

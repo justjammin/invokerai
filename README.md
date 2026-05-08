@@ -16,34 +16,11 @@ Extracted from [LENA](https://github.com/justjammin/lena), the AI orchestrator I
 
 ## Install
 
-### npm (Mac / Linux / Windows)
-
-Requires Node 16+ and Python 3.9+.
+Requires Python 3.10+. Check yours first if anything fails:
 
 ```bash
-npm install -g invokerai-mcp
+python --version
 ```
-
-First run creates `~/.invokerai/venv`, pip-installs `agent-invoker` into it, then starts the MCP server. Every run after that skips setup and just goes. No activation dance, no `source venv/bin/activate` every session. It finds its own Python.
-
-Want to update the Python package without reinstalling the npm wrapper?
-
-```bash
-invoker-mcp --update
-```
-
-Done.
-
-### Homebrew (Mac / Linux)
-
-```bash
-brew tap justjammin/invokerai
-brew install invokerai
-```
-
-Fully isolated. Ships with its own virtualenv. Nothing touches your system Python.
-
-### Direct install
 
 ```bash
 git clone https://github.com/justjammin/invokerai
@@ -51,11 +28,10 @@ cd invokerai
 python install.py
 ```
 
-Or from PyPI:
+The installer creates a venv at `~/.invokerai/venv`. Activate it so the `invoker` command is on your PATH:
 
 ```bash
-pip install agent-invoker
-invoker setup
+source ~/.invokerai/venv/bin/activate
 ```
 
 ---
@@ -83,7 +59,7 @@ No config file to edit. No hook to write. Restart your editor. Routing is live.
 
 Nothing you have to do. That's the thing.
 
-You type your task. Claude identifies the relevant domains, calls `mcp__invokerai__spawn_specialist`, and hands execution to the right specialist — all before any code gets written. You just get a backend engineer when you need one.
+You type your task. Your agent identifies the relevant domains, calls `mcp__invokerai__spawn_specialist`, and hands execution to the right specialist — all before any code gets written. You just get a backend engineer when you need one.
 
 For "refactor the payment gateway to async/await", InvokerAI returns the specialist with that context. There's also a gate that ensures no Agent call bypasses routing.
 
