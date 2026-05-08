@@ -10,6 +10,17 @@ from agent_invoker.registry.loader import load_registry, Agent
 from agent_invoker import classifier
 
 LOG_PATH = Path.home() / ".invokerai" / "routing_log.jsonl"
+
+_nli_cache: dict = {}
+
+
+def _get_nli_model():
+    if "model" not in _nli_cache:
+        from transformers import pipeline
+        _nli_cache["model"] = pipeline("zero-shot-classification", model="cross-encoder/nli-deberta-v3-base")
+    return _nli_cache["model"]
+
+
 _AGENTS_DIR = Path.home() / ".claude" / "agents"
 _REPO_AGENTS_DIR = Path(__file__).parent.parent / "agents"
 
@@ -56,6 +67,17 @@ _ROLE_DOMAIN: dict[str, str] = {
     "architect-reviewer": "architecture",
     "microservices-architect": "architecture",
     "api-designer": "architecture",
+    "agent-organizer": "orchestration",
+    "context-manager": "orchestration",
+    "workflow-orchestrator": "orchestration",
+    "task-distributor": "orchestration",
+    "multi-agent-coordinator": "orchestration",
+    "accessibility-tester": "testing",
+    "cli-developer": "backend",
+    "mlops-engineer": "ml",
+    "penetration-tester": "security",
+    "qa-expert": "testing",
+    "quant-analyst": "data",
 }
 
 _SUBDOMAIN_TRIGGERS: list[tuple[str, str, list[str]]] = [
@@ -185,26 +207,48 @@ def route(
         role = execute_roles[0] if execute_roles else _EXPLICIT_DOMAIN_ROLE.get(domains[0])
         confidence = 90
         source = "domains"
+        routing = "orchestrate"
         pattern = decomp.pattern
         steps = decomp.steps
     else:
         interim = _regex_score(task, registry)
+        ml_determined_routing = False
         if interim["confidence"] < 70:
             ml = classifier.predict(task)
             if ml and ml["confidence"] > interim["confidence"]:
-                interim.update(ml)
+                ml_update = {k: v for k, v in ml.items() if k != "suggested_role" or v is not None}
+                interim.update(ml_update)
+                if interim.get("source") == "ml":
+                    ml_determined_routing = True
         confidence = interim["confidence"]
         source = interim.get("source", "regex")
-        role = interim.get("suggested_role")
+
+        # Collect all registry matches sorted by category priority
+        matches = _collect_matches(task, registry)
+        if matches:
+            role = matches[0]["role"]
+        else:
+            role = interim.get("suggested_role")
+
         decomp = _decompose_internal(task, registry)
         pattern = decomp.pattern
         steps = decomp.steps
+
+        # Determine routing from match spread unless ML already set it
+        if not ml_determined_routing:
+            if len(matches) >= 2:
+                categories = {m["category"] for m in matches}
+                routing = "orchestrate" if len(categories) >= 2 else "direct"
+            else:
+                routing = "direct"
+        else:
+            routing = interim.get("routing", "orchestrate")
 
     agent = registry.get(role or "")
     tools = agent.tools if agent else []
 
     routing_result = RoutingResult(
-        routing="orchestrate",
+        routing=routing,
         role=role,
         confidence=confidence,
         tools=tools,
@@ -306,7 +350,19 @@ def _count_domains(t: str) -> int:
         "security": r"\b(auth|oauth|jwt|permission|role|encrypt|credential|secret)\b",
         "ml": r"\b(model|training|inference|embedding|\bllm\b|fine.?tun|rag|vector|neural)\b",
     }
-    return sum(1 for p in patterns.values() if re.search(p, t))
+    regex_count = sum(1 for p in patterns.values() if re.search(p, t))
+
+    if regex_count <= 1:
+        try:
+            nli = _get_nli_model()
+            _nli_labels = ["frontend", "backend", "database", "devops", "security", "ml"]
+            result = nli(t, candidate_labels=_nli_labels, multi_label=True)
+            nli_count = sum(1 for score in result["scores"] if score > 0.5)
+            return max(regex_count, nli_count)
+        except ImportError:
+            pass
+
+    return regex_count
 
 
 # ── MAS orchestration patterns ────────────────────────────────────────────────
@@ -399,6 +455,20 @@ def _generate_steps(
     primary_role: str,
 ) -> list[dict]:
     fallback = domain_roles if domain_roles else [(None, primary_role)]
+
+    if primary_role in ("debugger", "error-detective") and domain_roles:
+        steps = [
+            {"step": 1, "role": primary_role, "action": "Diagnose root cause", "parallel": False},
+        ]
+        for i, (domain, role) in enumerate(domain_roles[:3], start=2):
+            steps.append({"step": i, "role": role, "action": f"Inspect {domain} layer", "parallel": True})
+        steps.append({
+            "step": len(domain_roles[:3]) + 2,
+            "role": primary_role,
+            "action": "Validate and apply fix",
+            "parallel": False,
+        })
+        return steps
 
     if pattern == PATTERN_FEEDBACK_LOOP:
         generator = primary_role
@@ -527,6 +597,42 @@ def decompose(task: str, custom_registry: str | None = None, domains: list[str] 
     """Detect orchestration pattern and generate skeleton steps for a multi-agent task."""
     registry = load_registry(custom_registry)
     return _decompose_internal(task, registry, explicit_domains=domains)
+
+
+_CATEGORY_PRIORITY = {
+    "security": 0,
+    "testing": 1,
+    "ml": 2,
+    "debugging": 3,
+    "code-review": 4,
+    "coding": 5,
+    "architecture": 6,
+    "data": 7,
+    "documentation": 8,
+    "research": 9,
+    "orchestration": 10,
+    "implementation": 11,
+}
+
+
+def _collect_matches(task: str, registry: dict[str, Agent]) -> list[dict]:
+    t = task.lower()
+    matches = []
+    for agent in registry.values():
+        if agent.orchestrate:
+            continue
+        for trigger in agent.triggers:
+            if re.search(r"\b" + re.escape(trigger) + r"\b", t):
+                priority = _CATEGORY_PRIORITY.get(agent.category, 99)
+                matches.append({
+                    "role": agent.id,
+                    "category": agent.category,
+                    "trigger": trigger,
+                    "priority": priority,
+                })
+                break
+    matches.sort(key=lambda m: m["priority"])
+    return matches
 
 
 def _suggest_role(t: str, imp_verbs: set[str], registry: dict[str, Agent]) -> str:

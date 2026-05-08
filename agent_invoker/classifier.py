@@ -41,6 +41,7 @@ def build(
     examples: list[tuple[str, str]],
     output_path: Path = DEFAULT_PKL,
     phase: int = 1,
+    model_name: str = "BAAI/bge-large-en-v1.5",
 ) -> None:
     texts, labels = zip(*examples)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -59,11 +60,11 @@ def build(
         from sentence_transformers import SentenceTransformer
         from sklearn.ensemble import RandomForestClassifier
 
-        model = SentenceTransformer("all-mpnet-base-v2")
+        model = SentenceTransformer(model_name)
         X = model.encode(list(texts))
         clf = RandomForestClassifier(n_estimators=100, random_state=42)
         clf.fit(X, labels)
-        payload = {"phase": 2, "model_name": "all-mpnet-base-v2", "clf": clf}
+        payload = {"phase": 2, "model_name": model_name, "clf": clf}
 
     pickle.dump(payload, open(output_path, "wb"))
     print(f"Router saved → {output_path}  (phase {phase}, {len(examples)} examples)")

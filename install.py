@@ -21,9 +21,6 @@ from pathlib import Path
 MIN_PYTHON = (3, 9)
 INVOKERAI_DIR = Path.home() / ".invokerai"
 VENV_DIR = INVOKERAI_DIR / "venv"
-CLAUDE_AGENTS_DIR = Path.home() / ".claude" / "agents"
-LOCAL_AGENTS_DIR = Path(__file__).parent / "agents"
-
 _IN_MANAGED_VENV = os.environ.get("_INVOKERAI_VENV") == "1"
 
 
@@ -94,16 +91,6 @@ def pip_install(editable: bool = False) -> None:
     print("  Package: agent-invoker installed")
 
 
-def install_agents() -> None:
-    if not LOCAL_AGENTS_DIR.exists():
-        return
-    CLAUDE_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
-    files = list(LOCAL_AGENTS_DIR.glob("*.md"))
-    for f in files:
-        shutil.copy2(f, CLAUDE_AGENTS_DIR / f.name)
-    print(f"  Agents:  {len(files)} agent files → {CLAUDE_AGENTS_DIR}")
-
-
 def _setup_editors() -> None:
     from agent_invoker.setup_editors import run
     pkg_dir = Path(__file__).parent
@@ -164,7 +151,6 @@ def main() -> None:
     check_python()
     check_pip()
     pip_install(editable=args.dev)
-    install_agents()
 
     if not args.no_build:
         build_router()

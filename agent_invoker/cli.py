@@ -12,7 +12,7 @@ _SPAWN_TOKEN = Path.home() / ".invokerai" / "spawn_token"
 def main() -> None:
     # Peek at argv to decide: subcommand dispatch or bare task routing
     argv = sys.argv[1:]
-    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall", "decompose", "stop"}
+    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall", "decompose", "stop", "update"}
 
     if argv and argv[0] in known_commands:
         _dispatch_subcommand(argv)
@@ -189,6 +189,52 @@ def _handle_stop(_argv: list[str]) -> None:
         print("No orphaned invoker-mcp processes found")
 
 
+# ── update — reinstall package, rebuild router, run migration ─────────────────
+
+def _handle_update(_argv: list[str]) -> None:
+    import importlib.util
+    import pathlib
+    import subprocess
+
+    pkg_dir = pathlib.Path(__file__).parent.parent
+
+    print("InvokerAI update — reinstalling and migrating...")
+    print()
+
+    # 1. Reinstall editable
+    print("  Step 1: reinstalling package (editable)...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-e", str(pkg_dir), "--quiet"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print(f"  ERROR: pip install -e failed:\n{result.stderr}")
+        sys.exit(1)
+    print("  Package: reinstalled (editable)")
+
+    # 2. Rebuild router.pkl
+    print("  Step 2: rebuilding router...")
+    scripts_dir = pkg_dir / "scripts" / "build_router.py"
+    result = subprocess.run(
+        [sys.executable, str(scripts_dir), "--phase", "1"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print(f"  WARNING: router rebuild failed — regex fallback will be used\n{result.stderr}")
+    else:
+        print("  Router: rebuilt")
+
+    # 3. Run migration
+    print("  Step 3: running migration...")
+    spec = importlib.util.spec_from_file_location("migrate", pkg_dir / "migrate.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.run()
+
+    print()
+    print("Update complete. Restart Claude Code / Cursor / Kiro to pick up changes.")
+
+
 # ── tools subcommand ──────────────────────────────────────────────────────────
 
 def _dispatch_subcommand(argv: list[str]) -> None:
@@ -225,6 +271,8 @@ def _dispatch_subcommand(argv: list[str]) -> None:
         _handle_decompose(rest)
     elif command == "stop":
         _handle_stop(rest)
+    elif command == "update":
+        _handle_update(rest)
 
 
 def _handle_tools(argv: list[str]) -> None:
@@ -325,6 +373,7 @@ def _print_help() -> None:
   invoker uninstall                                Remove all InvokerAI config (hooks, MCP entries, CLAUDE.md block)
   invoker uninstall --purge                        Also delete ~/.invokerai/ (venv, logs, tokens)
   invoker migrate                                  Upgrade existing setup (purge old hooks, new token gate)
+  invoker update                                   Reinstall package, rebuild router, run migration
   invoker mcp                                      Start MCP server (stdio)
 
   invoker tools add --all TOOL [TOOL...]           Add tools to all agents

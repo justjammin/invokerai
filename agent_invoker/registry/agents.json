@@ -56,6 +56,12 @@
         "contract"
       ],
       "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
         "mcp__lean-ctx__ctx_read",
         "mcp__lean-ctx__ctx_shell",
         "mcp__lean-ctx__ctx_search",
@@ -113,10 +119,13 @@
       ],
       "triggers": [
         "review",
-        "audit",
         "code review",
+        "review pr",
+        "review this",
+        "pull request",
         "second opinion",
         "security review",
+        "code quality",
         "vulnerability",
         "owasp",
         "xss",
@@ -359,6 +368,70 @@
       "orchestrate": false
     },
     {
+      "id": "ai-writing-auditor",
+      "category": "content-creation",
+      "description": "Audits content for AI writing patterns and rewrites text to remove them",
+      "domains": [],
+      "triggers": [
+        "audit writing",
+        "ai writing",
+        "remove ai tells",
+        "humanize prose",
+        "ai patterns"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "documentation-engineer",
+      "category": "documentation",
+      "description": "Architects and creates comprehensive documentation systems — API docs, tutorials, guides, SDK references",
+      "domains": [],
+      "triggers": [
+        "api docs",
+        "documentation system",
+        "technical documentation",
+        "sdk docs",
+        "docs architecture",
+        "documentation engineer"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
       "id": "fintech-engineer",
       "category": "enterprise",
       "description": "Builds payment systems, financial integrations, and compliance-heavy financial applications",
@@ -469,20 +542,25 @@
     },
     {
       "id": "backend-developer",
-      "category": "implementation",
+      "category": "coding",
       "description": "Builds server-side APIs, microservices, and backend systems with robust architecture",
       "domains": [
         "backend"
       ],
       "triggers": [
-        "api",
-        "endpoint",
-        "server",
         "backend",
-        "rest",
-        "service",
-        "controller",
-        "middleware"
+        "rest api",
+        "graphql",
+        "microservice",
+        "node",
+        "express",
+        "fastapi",
+        "django",
+        "laravel",
+        "flask",
+        "spring boot",
+        "rails",
+        "nestjs"
       ],
       "tools": [
         "Read",
@@ -505,7 +583,7 @@
     },
     {
       "id": "frontend-developer",
-      "category": "implementation",
+      "category": "coding",
       "description": "Builds complete frontend applications across React, Vue, and Angular",
       "domains": [
         "frontend"
@@ -543,7 +621,7 @@
     },
     {
       "id": "fullstack-developer",
-      "category": "implementation",
+      "category": "coding",
       "description": "Builds complete features spanning database, API, and frontend layers as a unit",
       "domains": [
         "backend",
@@ -553,11 +631,9 @@
       "triggers": [
         "full stack",
         "fullstack",
+        "full-stack",
         "feature",
-        "end to end",
-        "build",
-        "implement",
-        "create"
+        "end to end"
       ],
       "tools": [
         "Read",
@@ -580,7 +656,7 @@
     },
     {
       "id": "mcp-developer",
-      "category": "implementation",
+      "category": "coding",
       "description": "Builds, debugs, and optimizes Model Context Protocol servers and clients",
       "domains": [
         "backend"
@@ -613,7 +689,7 @@
     },
     {
       "id": "ui-designer",
-      "category": "implementation",
+      "category": "coding",
       "description": "Designs visual interfaces, design systems, component libraries with accessibility",
       "domains": [
         "frontend"
@@ -622,7 +698,6 @@
         "ui design",
         "design system",
         "component library",
-        "accessibility",
         "figma",
         "visual design",
         "ux"
@@ -648,7 +723,7 @@
     },
     {
       "id": "agent-installer",
-      "category": "implementation",
+      "category": "platform",
       "description": "Discovers, browses, and installs Claude Code agents from awesome-claude-code-subagents",
       "domains": [],
       "triggers": [
@@ -678,7 +753,7 @@
     },
     {
       "id": "business-analyst",
-      "category": "implementation",
+      "category": "product",
       "description": "Analyzes business processes, gathers requirements, identifies process improvement opportunities",
       "domains": [],
       "triggers": [
@@ -711,7 +786,7 @@
     },
     {
       "id": "project-manager",
-      "category": "implementation",
+      "category": "product",
       "description": "Establishes project plans, tracks execution, manages risks, controls budget and schedule",
       "domains": [],
       "triggers": [
@@ -745,7 +820,7 @@
     },
     {
       "id": "task-distributor",
-      "category": "implementation",
+      "category": "platform",
       "description": "Distributes tasks across agents or workers, manages queues, and balances workloads",
       "domains": [],
       "triggers": [
@@ -773,66 +848,8 @@
       "orchestrate": true
     },
     {
-      "id": "weave-planner",
-      "category": "implementation",
-      "description": "Decomposes complex tasks into a Weave execution graph before agents are dispatched",
-      "domains": [],
-      "triggers": [
-        "weave",
-        "execution graph",
-        "plan then execute",
-        "decompose before"
-      ],
-      "tools": [
-        "Read",
-        "Write",
-        "Bash",
-        "Glob",
-        "Grep",
-        "mcp__lean-ctx__ctx_read",
-        "mcp__lean-ctx__ctx_shell",
-        "mcp__lean-ctx__ctx_search",
-        "mcp__lean-ctx__ctx_tree",
-        "mcp__lean-ctx__ctx_session",
-        "mcp__lean-ctx__ctx_knowledge",
-        "mcp__lean-ctx__ctx_edit",
-        "mcp__lean-ctx__ctx_overview",
-        "mcp__lean-ctx__ctx_preload"
-      ],
-      "orchestrate": true
-    },
-    {
-      "id": "wiki-scribe",
-      "category": "implementation",
-      "description": "Reads and writes LENA wiki memory nodes with schema validation and staleness detection",
-      "domains": [],
-      "triggers": [
-        "wiki",
-        "memory node",
-        "lena wiki",
-        "knowledge node"
-      ],
-      "tools": [
-        "Read",
-        "Write",
-        "Edit",
-        "Glob",
-        "Grep",
-        "mcp__lean-ctx__ctx_read",
-        "mcp__lean-ctx__ctx_shell",
-        "mcp__lean-ctx__ctx_search",
-        "mcp__lean-ctx__ctx_tree",
-        "mcp__lean-ctx__ctx_session",
-        "mcp__lean-ctx__ctx_knowledge",
-        "mcp__lean-ctx__ctx_edit",
-        "mcp__lean-ctx__ctx_overview",
-        "mcp__lean-ctx__ctx_preload"
-      ],
-      "orchestrate": false
-    },
-    {
       "id": "multi-agent-coordinator",
-      "category": "implementation",
+      "category": "platform",
       "description": "Coordinates concurrent agents with communication, shared state, and failure handling",
       "domains": [],
       "triggers": [
@@ -1072,6 +1089,39 @@
       "orchestrate": false
     },
     {
+      "id": "content-marketer",
+      "category": "content-creation",
+      "description": "Develops content strategies and creates SEO-optimized marketing content across channels",
+      "domains": [],
+      "triggers": [
+        "content strategy",
+        "seo content",
+        "content marketing",
+        "blog post",
+        "campaign",
+        "content calendar"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
       "id": "test-automator",
       "category": "testing",
       "description": "Builds automated test frameworks, creates test scripts, integrates testing into CI/CD",
@@ -1089,6 +1139,222 @@
         "spec",
         "ci testing",
         "automated tests"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "accessibility-tester",
+      "category": "testing",
+      "description": "Audits UI changes and interaction flows for accessibility — WCAG, ARIA semantics, keyboard navigation, screen reader compatibility",
+      "domains": [
+        "frontend"
+      ],
+      "triggers": [
+        "accessibility",
+        "a11y",
+        "wcag",
+        "aria",
+        "screen reader",
+        "keyboard navigation",
+        "color contrast",
+        "focus order"
+      ],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "cli-developer",
+      "category": "coding",
+      "description": "Builds command-line tools and terminal applications with intuitive UX, cross-platform compatibility, and sub-50ms startup",
+      "domains": [
+        "backend"
+      ],
+      "triggers": [
+        "cli",
+        "command-line",
+        "terminal app",
+        "command line tool",
+        "argparse",
+        "click",
+        "cobra",
+        "commander",
+        "shell tool"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "mlops-engineer",
+      "category": "ml",
+      "description": "Owns model deployment, registry, pipeline, and monitoring — deterministic builds, controlled promotion, fast rollback",
+      "domains": [
+        "ml",
+        "devops"
+      ],
+      "triggers": [
+        "mlops",
+        "model deployment",
+        "model registry",
+        "model pipeline",
+        "feature drift",
+        "drift detection",
+        "canary rollout",
+        "model monitoring",
+        "model promotion"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "penetration-tester",
+      "category": "security",
+      "description": "Conducts authorized security penetration tests — vulnerability discovery, exploitation, risk validation, remediation guidance",
+      "domains": [
+        "security"
+      ],
+      "triggers": [
+        "pentest",
+        "penetration test",
+        "vulnerability scan",
+        "security assessment",
+        "exploit",
+        "owasp testing",
+        "ethical hacking",
+        "red team"
+      ],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "qa-expert",
+      "category": "testing",
+      "description": "Owns comprehensive quality assurance strategy — test planning, defect management, quality metrics, 90%+ coverage",
+      "domains": [
+        "backend",
+        "frontend"
+      ],
+      "triggers": [
+        "qa",
+        "quality assurance",
+        "test strategy",
+        "test planning",
+        "defect",
+        "quality metrics",
+        "test coverage analysis",
+        "acceptance criteria"
+      ],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
+      "id": "quant-analyst",
+      "category": "research",
+      "description": "Develops quantitative trading strategies, financial models, derivatives pricing, and portfolio risk analytics",
+      "domains": [
+        "data",
+        "ml"
+      ],
+      "triggers": [
+        "quant",
+        "quantitative",
+        "trading strategy",
+        "financial model",
+        "backtesting",
+        "portfolio optimization",
+        "derivatives pricing",
+        "var",
+        "sharpe ratio",
+        "statistical arbitrage"
       ],
       "tools": [
         "Read",

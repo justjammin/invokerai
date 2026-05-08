@@ -32,6 +32,10 @@ embeddings = [
     "sentence-transformers>=2.7",
     "torch>=2.0",
 ]
+hf-classify = [
+    "transformers>=4.35.0",
+    "torch>=2.0.0",
+]
 dev = [
     "pytest>=7",
     "pytest-cov",

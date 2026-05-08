@@ -89,6 +89,53 @@ For "refactor the payment gateway to async/await", InvokerAI returns the special
 
 ---
 
+## What spawn_specialist actually does
+
+When Claude calls `mcp__invokerai__spawn_specialist(task, domains=[...])`, it isn't getting a label back. It's getting a fully constructed specialist identity.
+
+Here's what fires under the hood:
+
+```
+spawn_specialist("build a FastAPI endpoint with Pydantic validation", domains=["backend"])
+        │
+        ▼
+1. Classifier runs — TF-IDF + KNN + regex signals → role = "backend-developer", confidence = 87
+        │
+        ▼
+2. Tier-tree walk — _load_persona("backend-developer")
+        │
+        ├── agents/backend.md          ← Tier 1: universal backend rules
+        │   HTTP verbs, status codes, RBAC, structured logging, connection pooling...
+        │
+        ├── agents/backend/python.md   ← Tier 2: Python-specific patterns
+        │   Type hints, Pydantic v2, asyncio, dependency injection...
+        │
+        └── agents/backend/python/fastapi.md  ← Tier 3: FastAPI deep specialist
+            Routers, Depends(), background tasks, OpenAPI conventions...
+        │
+        ▼
+3. Fragments composed → system_prompt_fragment (capped 6000 tok)
+        │
+        ▼
+4. Bundle returned:
+   {
+     role: "backend-developer",
+     confidence: 87,
+     routing: "direct",
+     tools: ["Read", "Write", "Edit", "Bash", ...],
+     persona: {
+       resource_uri: "agent://backend-developer",
+       system_prompt_fragment: "# Roleplay Notes\n- HTTP verbs: GET read-only..."
+     }
+   }
+```
+
+The spawned agent doesn't get a name. It gets a composed behavioral contract — stacked from domain rules, subdomain patterns, and specialist depth — all assembled for this exact task. Three tiers of context collapses into one prompt fragment the agent runs as.
+
+The tighter the match, the deeper the stack. A FastAPI task pulls all three tiers. A generic backend task pulls one or two. Task context shapes the specialist in real time, without any manual agent selection.
+
+---
+
 ## Multi-agent tasks
 
 When a task spans multiple domains, InvokerAI hands Claude a structured decomposition instead of free-text guidance. Six patterns — detected from the task text, no config required:
@@ -181,6 +228,7 @@ Commands you run directly:
 ```
 invoker setup                                Configure MCP + hooks for all detected editors
 invoker migrate                              Upgrade v0.1.0 setup
+invoker update                               Reinstall editable, rebuild router, run migration
 invoker uninstall                            Remove all InvokerAI config
 invoker uninstall --purge                    Also delete ~/.invokerai/ (venv, logs, tokens)
 invoker --model-info                         Show router phase + status

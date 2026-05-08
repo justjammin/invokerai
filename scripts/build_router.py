@@ -107,6 +107,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--phase", type=int, choices=[1, 2], default=1)
     parser.add_argument("--output", type=Path, default=Path.home() / ".invokerai" / "router.pkl")
+    parser.add_argument("--data", type=Path, default=None, metavar="PATH",
+                        help="JSONL file with {\"text\": \"...\", \"label\": \"direct|role\"} lines to append to examples")
     args = parser.parse_args()
 
     if args.phase == 2:
@@ -116,8 +118,23 @@ def main() -> None:
             print("Phase 2 requires: pip install agent-invoker[embeddings]")
             sys.exit(1)
 
-    print(f"Building Phase {args.phase} router from {len(EXAMPLES)} examples...")
-    build(EXAMPLES, output_path=args.output, phase=args.phase)
+    examples = list(EXAMPLES)
+
+    if args.data is not None:
+        import json
+        with args.data.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    examples.append((obj["text"], obj["label"]))
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
+    print(f"Building Phase {args.phase} router from {len(examples)} examples...")
+    build(examples, output_path=args.output, phase=args.phase)
 
 
 if __name__ == "__main__":
