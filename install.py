@@ -26,9 +26,8 @@ _IN_MANAGED_VENV = os.environ.get("_INVOKERAI_VENV") == "1"
 
 def bootstrap_venv() -> None:
     """Re-exec inside ~/.invokerai/venv, creating it first if needed."""
-    in_venv = sys.prefix != sys.base_prefix or "VIRTUAL_ENV" in os.environ
-    if in_venv or _IN_MANAGED_VENV:
-        return
+    if _IN_MANAGED_VENV:
+        return  # already bootstrapped by a previous exec
 
     venv_python = VENV_DIR / "bin" / "python"
 
@@ -57,6 +56,10 @@ def bootstrap_venv() -> None:
                 [str(venv_python), "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
                 check=True,
             )
+
+    # Skip re-exec if already running inside the managed venv
+    if Path(sys.prefix) == VENV_DIR:
+        return
 
     env = os.environ.copy()
     env["_INVOKERAI_VENV"] = "1"
