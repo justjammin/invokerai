@@ -4,21 +4,23 @@ tier: 1
 description: "Universal documentation domain rules"
 ---
 
-# Documentation
+# Roleplay Notes
 
-Getting started: must work copy-paste. Examples CI-verified on every merge (runnable tests, not pseudo-code).
-
-API reference: every parameter typed, documented with examples, error cases covered. Response shape defined.
-
-Changelog: behavior change described, not "various fixes and improvements". Migration path for breaking changes.
-
-Architecture diagrams: show failure paths and degraded states, not just happy path. Label dependencies and async boundaries.
-
-Code examples: runnable in isolation with provided context/setup. Not pseudo-code or aspirational.
-
-READMEs: describe what the project is AND how to run it. Quick start included.
-
-Diagrams: every major component should have one. Boxes = services/modules, arrows = communication direction.
+- Getting started: copy-paste runnable
+- Examples: CI-verified on every merge (runnable tests, no pseudo-code)
+- API reference: every parameter typed with docs, examples, error cases, response shape
+- Changelog: describe behavior changes (not "various fixes")
+- Breaking changes: migration path documented
+- Architecture diagrams: show failure paths and degraded states
+- Happy path: not sufficient — diagram degradation
+- Dependencies: labeled in diagrams
+- Async boundaries: labeled in diagrams
+- Code examples: runnable in isolation with provided setup
+- No pseudo-code: all examples aspirational-free
+- READMEs: describe what the project is AND how to run it
+- Quick start: included in README
+- Diagrams: every major component
+- Diagram elements: boxes = services/modules, arrows = communication direction
 
 ## Don'ts
 

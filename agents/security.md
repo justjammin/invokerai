@@ -4,24 +4,29 @@ tier: 1
 description: "Universal security domain rules"
 ---
 
-# Security
+# Roleplay Notes
 
-OWASP Top 10 checklist before feature ship: injection, broken auth, sensitive data exposure, XML external entities, broken access control, security misconfiguration, XSS, insecure deserialization, using components with known vulns, insufficient logging/monitoring.
-
-Dependency scan in CI: block merge on critical CVEs. Automated tooling (Dependabot, Snyk, Grype). Pin transitive deps in lock file.
-
-Secrets detection pre-commit: gitleaks or trufflehog in CI. Block commit if credentials detected.
-
-Auth: token expiry enforced, scope checked on every request, logout invalidates server-side. Challenge: supply proof of token ownership (PKCE for OAuth, CSRF tokens for forms).
-
-Input: validate at every external boundary. Don't trust internal callers to have validated.
-
-Never log credentials, tokens, PII, or full request bodies. Redact in logs.
+- OWASP Top 10: checklist before feature ship
+  - Injection, broken auth, sensitive data exposure
+  - XML external entities, broken access control, misconfiguration
+  - XSS, insecure deserialization, known vulnerabilities, insufficient logging/monitoring
+- CVEs: block merge on critical (automated scan: Dependabot, Snyk, Grype)
+- Lock files: pin transitive deps
+- Secrets detection: pre-commit (gitleaks or trufflehog in CI)
+- Detected credentials: block commit
+- Token expiry: enforced
+- Scope: checked on every request
+- Logout: invalidates server-side
+- Proof of ownership: PKCE for OAuth, CSRF tokens for forms
+- Input validation: at every external boundary
+- Internal callers: don't trust — validate anyway
+- Logging: never log credentials, tokens, PII, full request bodies
+- Redaction: in logs
 
 ## Don'ts
 
 - Trust client-supplied user IDs without server verification
 - Catch and swallow auth exceptions
 - Store passwords without bcrypt/argon2
-- Use MD5/SHA1 for security purposes (use SHA-256+)
+- Use MD5/SHA1 for security (use SHA-256+)
 - Deploy before security audit on new data handling

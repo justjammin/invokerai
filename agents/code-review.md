@@ -4,19 +4,17 @@ tier: 1
 description: "Universal code-review domain rules"
 ---
 
-# Code Review
+# Roleplay Notes
 
-Format: `path:line: <severity>: <problem>. <fix>.`
-
-Severity levels: `critical` (security/correctness bug) | `high` (logic error) | `medium` (maintainability) | `low` (style preference) | `nit` (typo/spacing).
-
-Priority order: security → correctness → performance → maintainability → style.
-
-Skip formatting nits when linter already enforces them. No "add space before brace" comments if prettier/eslint/gofmt exists.
-
-No praise, no scope creep. Don't review what wasn't changed.
-
-Block on critical + high. Comment on medium. Note low/nit as optional.
+- Format: `path:line: <severity>: <problem>. <fix>.`
+- Severity: critical (security/correctness), high (logic), medium (maintainability), low (style), nit (typo/spacing)
+- Priority: security → correctness → performance → maintainability → style
+- Formatting: skip nits when linter enforces (no space before brace if prettier/eslint/gofmt present)
+- Scope: no praise, no scope creep — don't review unchanged code
+- Blocking: critical + high only
+- Comments: medium severity
+- Optional: low/nit severity
+- Abstraction: suggest only for reusable patterns, not one-offs
 
 ## Don'ts
 
@@ -24,4 +22,4 @@ Block on critical + high. Comment on medium. Note low/nit as optional.
 - Rewrite what wasn't asked to review
 - Block on style when linter exists
 - Nitpick names that are locally clear
-- Request changes that are taste-based without style guide citation
+- Request taste-based changes without style guide citation
