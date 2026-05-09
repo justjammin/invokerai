@@ -511,15 +511,13 @@ def _generate_steps_v2(domains: list[str], task: str) -> list[dict]:
     code_review_only = _is_code_review_only(domains)
 
     if code_review_only:
-        # feedback loop: review → assess — no plan step
         steps.append({"step": step_num, "role": "code-reviewer", "action": "Review code quality and issues", "parallel": False})
-        step_num += 1
-        steps.append({"step": step_num, "role": "architect-reviewer", "action": "Architectural assessment", "parallel": False})
         return steps
 
-    # Step 1: PLAN
-    steps.append({"step": step_num, "role": "architect-reviewer", "action": "Create implementation plan", "parallel": False})
-    step_num += 1
+    # Step 1: PLAN — only if architecture domain explicitly requested
+    if "architecture" in domains:
+        steps.append({"step": step_num, "role": "architect-reviewer", "action": "Create implementation plan", "parallel": False})
+        step_num += 1
 
     # Step 2+: EXECUTE (exclude architecture/code-review/devops — handled separately)
     execute_domains = [d for d in domains if d not in ("architecture", "code-review", "devops")]

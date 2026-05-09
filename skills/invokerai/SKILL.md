@@ -30,6 +30,28 @@ invoker setup
 `architecture` | `backend` | `frontend` | `database` | `devops` | `security`
 `ml` | `testing` | `documentation` | `mobile` | `data` | `code-review`
 
+**Domain precision is critical** — `steps[]` is shaped directly by `domains[]`. Wrong domains → phantom steps → wasted agents.
+- Pass ONLY domains where real work exists. Ask: "does this task actually touch this layer?"
+- When unsure, under-specify — low confidence score will surface missing domains.
+- Never add a domain speculatively.
+
+**Domain decision guide:**
+
+| Domain | Add when... | Skip when... |
+|--------|-------------|--------------|
+| `architecture` | New subsystem design, cross-cutting redesign, impl agent needs codebase context before it can safely start, "how should we structure X?" | Bug fix, additive feature with clear scope, impl path is obvious |
+| `backend` | Server routes, REST/GraphQL APIs, IPC handlers, business logic, auth middleware | Pure UI work, DB-only schema changes with no server code |
+| `frontend` | UI components, styling, client-side state, browser events, rendering | Server-only work, no user-facing changes |
+| `database` | Schema changes, migrations, query optimization, indexes, ORM models | No DB reads/writes in the task |
+| `devops` | CI/CD pipelines, Dockerfiles, infra config, deploy scripts, env vars | App code changes only |
+| `security` | Auth flows, permissions, secrets handling, input validation, CVE fixes | Feature work with no trust boundary changes |
+| `ml` | Model training, inference, embeddings, prompt engineering, vector search | Standard CRUD with no ML components |
+| `testing` | Writing/fixing tests, test infra, coverage gaps, flaky test diagnosis | Impl work where tests are a side effect (let impl agent write them) |
+| `documentation` | API docs, READMEs, changelogs, docstrings, user guides | Code-only changes with no public surface |
+| `mobile` | iOS/Android native code, React Native, Flutter, mobile-specific APIs | Web-only work |
+| `data` | ETL pipelines, data transforms, analytics queries, reporting | App features with no data pipeline involvement |
+| `code-review` | Reviewing a diff/PR, auditing quality/security, post-impl review | Active implementation (review ≠ build) |
+
 **Step 2 — Call spawn_specialist:**
 
 ```

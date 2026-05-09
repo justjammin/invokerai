@@ -27,8 +27,26 @@ from fastmcp.utilities.types import Image  # noqa: F401 — keep for future use
 
 _SPAWN_TOKEN = Path.home() / ".invokerai" / "spawn_token"
 _AGENTS_DIR = Path.home() / ".claude" / "agents"
+_SESSION_LOG = Path.home() / ".claude" / "logs" / "invokerai-sessions.md"
 
-mcp = FastMCP("invokerai", version="0.2.0")
+_BANNER = r"""
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║   ⚡  I N V O K E R A I   —   Agent Router                  ║
+║                                                              ║
+║   spawn_specialist → route → persona → steps → execute      ║
+║                                                              ║
+║   Domains: architecture · backend · frontend · database      ║
+║            devops · security · ml · testing · mobile        ║
+║            documentation · data · code-review               ║
+║                                                              ║
+║   PRIMARY SURFACE: mcp__invokerai__spawn_specialist()        ║
+║   Never call Agent directly. Never code — only orchestrate.  ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+"""
+
+mcp = FastMCP("invokerai", version="0.2.0", instructions=_BANNER.strip())
 
 # ── session ledger ────────────────────────────────────────────────────────────
 
@@ -57,6 +75,27 @@ def _update_session(session_id: str, role: str | None, routing: str) -> None:
 def _write_spawn_token(count: int) -> None:
     _SPAWN_TOKEN.parent.mkdir(parents=True, exist_ok=True)
     _SPAWN_TOKEN.write_text(f"{count}:{int(time.time())}")
+
+
+def _append_session_log(task: str, role: str | None, confidence: int, routing: str, domains: list[str] | None, duration: str = "") -> None:
+    try:
+        date = time.strftime("%Y-%m-%d")
+        short_task = (task[:77] + "...") if len(task) > 80 else task
+        short_task = short_task.replace("\n", " ").strip()
+        domains_str = ", ".join(domains) if domains else "—"
+        entry = (
+            f"\n### {date} — {short_task}\n"
+            f"- **Role selected:** {role or 'unknown'}\n"
+            f"- **Confidence:** {confidence}\n"
+            f"- **Routing:** {routing}\n"
+            f"- **Domains passed:** {domains_str}\n"
+            f"- **Wall-clock:** {duration}\n"
+        )
+        _SESSION_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with _SESSION_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(entry)
+    except Exception:
+        pass
 
 
 # ── agent resource helpers ────────────────────────────────────────────────────
@@ -93,6 +132,7 @@ def spawn_specialist(
 ) -> dict:
     if not task or not task.strip():
         raise ValueError("task is required")
+    start = time.time()
     from agent_invoker.core import route
     sid = session_id or "default"
     result = route(task, custom_registry=custom_registry, log=True, domains=domains)
@@ -112,6 +152,8 @@ def spawn_specialist(
         out["persona"] = result.persona
     out["pattern"] = result.pattern
     out["steps"] = result.steps
+    elapsed = time.time() - start
+    _append_session_log(task, result.role, result.confidence, result.routing, domains, f"{elapsed:.1f}s")
     return out
 
 
@@ -217,6 +259,47 @@ def list_agents(category: str | None = None) -> dict:
     ]
     agents.sort(key=lambda a: (a["category"], a["id"]))
     return {"agents": agents}
+
+
+@mcp.tool(
+    description=(
+        "Append outcome metrics (correction cycles + first-pass acceptance) to an "
+        "existing session log entry in ~/.claude/logs/invokerai-sessions.md. "
+        "Match by date + task prefix. Returns {ok: bool, error?: str}."
+    )
+)
+def log_outcome(
+    date: str,
+    task_prefix: str,
+    corrections: int,
+    accepted: bool,
+) -> dict:
+    try:
+        if not _SESSION_LOG.exists():
+            return {"ok": False, "error": "entry not found"}
+        text = _SESSION_LOG.read_text(encoding="utf-8")
+        header_prefix = f"### {date} — {task_prefix}"
+        lines = text.split("\n")
+        header_idx = next(
+            (i for i, ln in enumerate(lines) if ln.startswith(header_prefix)),
+            -1,
+        )
+        if header_idx == -1:
+            return {"ok": False, "error": "entry not found"}
+        insert_idx = len(lines)
+        for j in range(header_idx + 1, len(lines)):
+            if lines[j].startswith("### ") or lines[j].strip() == "":
+                insert_idx = j
+                break
+        outcome_lines = [
+            f"- **Correction cycles:** {corrections}",
+            f"- **First-pass accepted:** {'yes' if accepted else 'no'}",
+        ]
+        lines[insert_idx:insert_idx] = outcome_lines
+        _SESSION_LOG.write_text("\n".join(lines), encoding="utf-8")
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 # ── resources ─────────────────────────────────────────────────────────────────
