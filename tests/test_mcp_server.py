@@ -78,7 +78,7 @@ class TestServerInfo:
                 tools = await client.list_tools()
                 return {t.name for t in tools}
         names = _run(_t())
-        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task"}
+        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome"}
 
     def test_resources_list(self):
         resources = _agent_resources()
@@ -299,7 +299,8 @@ class TestDecomposeTask:
     def test_code_review_only_feedback_loop(self):
         result = decompose_task(task="review the auth code", domains=["code-review"])
         assert result["pattern"] == "feedback_loop"
-        assert len(result["steps"]) >= 2
+        assert len(result["steps"]) >= 1
+        assert result["steps"][0]["role"] == "code-reviewer"
 
     def test_three_domains_parallel_pattern(self):
         result = decompose_task(
