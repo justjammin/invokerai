@@ -78,6 +78,12 @@ _ROLE_DOMAIN: dict[str, str] = {
     "penetration-tester": "security",
     "qa-expert": "testing",
     "quant-analyst": "data",
+    "blockchain-security-auditor": "security",
+    "codebase-onboarding-engineer": "architecture",
+    "compliance-auditor": "security",
+    "incident-response-commander": "devops",
+    "software-architect": "architecture",
+    "sre": "devops",
 }
 
 _SUBDOMAIN_TRIGGERS: list[tuple[str, str, list[str]]] = [
@@ -652,6 +658,21 @@ def _suggest_role(t: str, imp_verbs: set[str], registry: dict[str, Agent]) -> st
 
     if re.search(r"\b(deploy|docker|kubernetes|k8s|terraform|cloud|aws|gcp|azure)\b", t):
         return "cloud-architect"
+
+    if re.search(r"\b(slo|error.?budget|sli|sre|chaos.?engineer|reliability.?engineer|toil)\b", t):
+        return "sre"
+
+    if re.search(r"\b(incident|post.?mortem|runbook|on.?call|sev1|sev2|sev3|pagerduty|opsgenie)\b", t):
+        return "incident-response-commander"
+
+    if re.search(r"\b(soc.?2|hipaa|pci.?dss|iso.?27001|compliance.?audit|audit.?readiness)\b", t):
+        return "compliance-auditor"
+
+    if re.search(r"\b(smart.?contract|solidity|reentrancy|defi|evm|web3|slither)\b", t):
+        return "blockchain-security-auditor"
+
+    if re.search(r"\b(onboard|codebase.?tour|orient.*code)\b", t):
+        return "codebase-onboarding-engineer"
 
     for agent in registry.values():
         if agent.orchestrate:

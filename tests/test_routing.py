@@ -133,3 +133,50 @@ class TestMultiDomainRouting:
         if r.routing == "orchestrate":
             assert isinstance(r.steps, list)
             assert len(r.steps) > 0
+
+
+# ---------------------------------------------------------------------------
+# New agents (sre, incident-response-commander, compliance-auditor,
+# blockchain-security-auditor, codebase-onboarding-engineer)
+# ---------------------------------------------------------------------------
+
+class TestNewAgentRouting:
+    def test_slo_routes_to_sre(self):
+        r = route("define slos and error budgets for the payment api", log=False)
+        assert r.role in ("sre", "cloud-architect", "debugger")
+
+    def test_toil_routes_to_sre(self):
+        r = route("set up sre practices and reduce operational toil", log=False)
+        assert r.role in ("sre", "cloud-architect")
+
+    def test_postmortem_routes_to_incident_commander(self):
+        r = route("write a post-mortem for last night's sev1 incident", log=False)
+        assert r.role in ("incident-response-commander", "technical-writer")
+
+    def test_runbook_routes_to_incident_commander(self):
+        r = route("create a runbook for database failover", log=False)
+        assert r.role in ("incident-response-commander", "technical-writer")
+
+    def test_oncall_routes_to_incident_commander(self):
+        r = route("design an on-call rotation and pagerduty schedule", log=False)
+        assert r.role in ("incident-response-commander", "cloud-architect")
+
+    def test_soc2_routes_to_compliance(self):
+        r = route("prepare for soc 2 audit readiness assessment", log=False)
+        assert r.role in ("compliance-auditor", "code-reviewer")
+
+    def test_hipaa_routes_to_compliance(self):
+        r = route("ensure our system meets hipaa compliance requirements", log=False)
+        assert r.role in ("compliance-auditor", "code-reviewer", "fintech-engineer")
+
+    def test_smart_contract_routes_to_blockchain(self):
+        r = route("audit this solidity smart contract for reentrancy vulnerabilities", log=False)
+        assert r.role in ("blockchain-security-auditor", "code-reviewer", "api-designer")
+
+    def test_defi_routes_to_blockchain(self):
+        r = route("review defi protocol for flash loan attack vectors", log=False)
+        assert r.role in ("blockchain-security-auditor", "code-reviewer")
+
+    def test_codebase_onboarding_routes(self):
+        r = route("onboard me into this new codebase", log=False)
+        assert r.role in ("codebase-onboarding-engineer", "architect-reviewer")
