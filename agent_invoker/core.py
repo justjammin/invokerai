@@ -24,6 +24,16 @@ def _get_nli_model():
 _AGENTS_DIR = Path.home() / ".claude" / "agents"
 _REPO_AGENTS_DIR = Path(__file__).parent.parent / "agents"
 
+_CAVEMAN_PREFIX = (
+    "# Style: caveman ultra\n"
+    "Prose/chat: drop articles, filler, hedging. Fragments OK. "
+    "Abbreviate (DB/auth/config/req/res/fn). X→Y for causality. "
+    "Technical terms and identifiers exact. "
+    "Code, commits, PR bodies: normal English. "
+    "Break character for security warnings and irreversible ops.\n\n"
+    "---\n\n"
+)
+
 _ROLE_DOMAIN: dict[str, str] = {
     "backend-developer": "backend",
     "fullstack-developer": "backend",
@@ -161,7 +171,7 @@ def _load_persona(role: str, task: str = "") -> dict:
         composed = "\n\n---\n\n".join(tiers)
         return {
             "resource_uri": f"agent://{role}",
-            "system_prompt_fragment": composed[:2000],
+            "system_prompt_fragment": _CAVEMAN_PREFIX + composed[:8000],
         }
 
     # Flat-file fallback (old naming convention)
@@ -169,7 +179,7 @@ def _load_persona(role: str, task: str = "") -> dict:
     if flat_file:
         return {
             "resource_uri": f"agent://{role}",
-            "system_prompt_fragment": _read_agent_body(flat_file)[:2000],
+            "system_prompt_fragment": _CAVEMAN_PREFIX + _read_agent_body(flat_file)[:8000],
         }
 
     return {"resource_uri": f"agent://{role}"}

@@ -1374,6 +1374,60 @@
         "mcp__lean-ctx__ctx_preload"
       ],
       "orchestrate": false
+    },
+    {
+      "id": "software-architect",
+      "category": "architecture",
+      "description": "Designs software systems from scratch using bounded contexts, architectural patterns, ADRs, and trade-off analysis",
+      "domains": ["architecture", "backend"],
+      "triggers": ["software architect", "bounded context", "architectural decision", "design from scratch", "monolith vs microservice", "c4 model", "event storming"],
+      "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "mcp__lean-ctx__ctx_read", "mcp__lean-ctx__ctx_shell", "mcp__lean-ctx__ctx_search", "mcp__lean-ctx__ctx_tree", "mcp__lean-ctx__ctx_session", "mcp__lean-ctx__ctx_knowledge", "mcp__lean-ctx__ctx_edit", "mcp__lean-ctx__ctx_overview", "mcp__lean-ctx__ctx_preload"],
+      "orchestrate": false
+    },
+    {
+      "id": "sre",
+      "category": "devops",
+      "description": "Site reliability engineering: SLOs, error budgets, observability, chaos engineering, toil reduction for production systems",
+      "domains": ["devops"],
+      "triggers": ["slo", "sli", "error budget", "site reliability", "toil", "chaos engineering", "observability stack", "golden signals", "burn rate"],
+      "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "mcp__lean-ctx__ctx_read", "mcp__lean-ctx__ctx_shell", "mcp__lean-ctx__ctx_search", "mcp__lean-ctx__ctx_tree", "mcp__lean-ctx__ctx_session", "mcp__lean-ctx__ctx_knowledge", "mcp__lean-ctx__ctx_edit", "mcp__lean-ctx__ctx_overview", "mcp__lean-ctx__ctx_preload"],
+      "orchestrate": false
+    },
+    {
+      "id": "incident-response-commander",
+      "category": "devops",
+      "description": "Production incident management: SEV classification, blameless post-mortems, runbooks, stakeholder communication, on-call design",
+      "domains": ["devops", "security"],
+      "triggers": ["incident", "post-mortem", "postmortem", "runbook", "on-call", "oncall", "sev1", "sev2", "sev3", "pagerduty", "opsgenie", "incident commander"],
+      "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "mcp__lean-ctx__ctx_read", "mcp__lean-ctx__ctx_shell", "mcp__lean-ctx__ctx_search", "mcp__lean-ctx__ctx_tree", "mcp__lean-ctx__ctx_session", "mcp__lean-ctx__ctx_knowledge", "mcp__lean-ctx__ctx_edit", "mcp__lean-ctx__ctx_overview", "mcp__lean-ctx__ctx_preload"],
+      "orchestrate": false
+    },
+    {
+      "id": "codebase-onboarding-engineer",
+      "category": "architecture",
+      "description": "Read-only codebase orientation: produces 1-line, 5-minute, and deep-dive repo maps with concrete file references. Never suggests changes.",
+      "domains": ["architecture"],
+      "triggers": ["onboard", "codebase tour", "explain repo", "new codebase", "orient code", "understand codebase", "repo map", "codebase overview"],
+      "tools": ["Read", "Glob", "Grep", "mcp__lean-ctx__ctx_read", "mcp__lean-ctx__ctx_shell", "mcp__lean-ctx__ctx_search", "mcp__lean-ctx__ctx_tree", "mcp__lean-ctx__ctx_session", "mcp__lean-ctx__ctx_overview"],
+      "orchestrate": false
+    },
+    {
+      "id": "compliance-auditor",
+      "category": "security",
+      "description": "SOC 2, ISO 27001, HIPAA, PCI-DSS compliance: gap assessments, controls implementation, evidence collection automation, audit readiness",
+      "domains": ["security"],
+      "triggers": ["soc 2", "soc2", "hipaa", "pci-dss", "pci dss", "iso 27001", "compliance audit", "audit readiness", "audit gap", "evidence collection", "controls implementation"],
+      "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "mcp__lean-ctx__ctx_read", "mcp__lean-ctx__ctx_shell", "mcp__lean-ctx__ctx_search", "mcp__lean-ctx__ctx_tree", "mcp__lean-ctx__ctx_session", "mcp__lean-ctx__ctx_knowledge", "mcp__lean-ctx__ctx_edit", "mcp__lean-ctx__ctx_overview", "mcp__lean-ctx__ctx_preload"],
+      "orchestrate": false
+    },
+    {
+      "id": "blockchain-security-auditor",
+      "category": "security",
+      "description": "Smart contract security audits: vulnerability detection (reentrancy, oracle manipulation, flash loan attacks), Slither/Mythril/Echidna, DeFi protocol review",
+      "domains": ["security"],
+      "triggers": ["smart contract", "solidity", "reentrancy", "defi", "evm", "web3", "blockchain audit", "slither", "flash loan", "oracle manipulation", "foundry exploit"],
+      "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "mcp__lean-ctx__ctx_read", "mcp__lean-ctx__ctx_shell", "mcp__lean-ctx__ctx_search", "mcp__lean-ctx__ctx_tree", "mcp__lean-ctx__ctx_session", "mcp__lean-ctx__ctx_knowledge", "mcp__lean-ctx__ctx_edit", "mcp__lean-ctx__ctx_overview", "mcp__lean-ctx__ctx_preload"],
+      "orchestrate": false
     }
   ]
 }

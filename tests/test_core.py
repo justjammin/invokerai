@@ -127,9 +127,11 @@ class TestLoadPersona:
         assert result == {"resource_uri": "agent://nonexistent-role-xyz-abc"}
 
     def test_system_prompt_fragment_max_2000(self):
+        from agent_invoker.core import _CAVEMAN_PREFIX
         result = _load_persona("debugger")
         if "system_prompt_fragment" in result:
-            assert len(result["system_prompt_fragment"]) <= 2000
+            # domain content capped at 2000; total includes fixed caveman prefix
+            assert len(result["system_prompt_fragment"]) <= 8000 + len(_CAVEMAN_PREFIX)
 
     def test_fragment_strips_frontmatter(self):
         result = _load_persona("debugger")
