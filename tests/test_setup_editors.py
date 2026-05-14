@@ -13,17 +13,19 @@ from agent_invoker.setup_editors import (
 )
 
 
-def test_inject_agents_md_skips_when_no_file(tmp_path: Path) -> None:
-    result = inject_agents_md(tmp_path)
-    assert result is False
-    assert not (tmp_path / "AGENTS.md").exists()
+def test_inject_agents_md_creates_when_no_file(tmp_path: Path) -> None:
+    agents_md = tmp_path / "AGENTS.md"
+    result = inject_agents_md(agents_md)
+    assert result is True
+    assert agents_md.exists()
+    assert "INVOKERAI-START" in agents_md.read_text()
 
 
 def test_inject_agents_md_appends_when_file_exists(tmp_path: Path) -> None:
     agents_md = tmp_path / "AGENTS.md"
     agents_md.write_text("")
 
-    result = inject_agents_md(tmp_path)
+    result = inject_agents_md(agents_md)
 
     assert result is True
     content = agents_md.read_text()
@@ -41,7 +43,7 @@ def test_inject_agents_md_updates_existing_block(tmp_path: Path) -> None:
     )
     agents_md.write_text(stale)
 
-    result = inject_agents_md(tmp_path)
+    result = inject_agents_md(agents_md)
 
     assert result is True
     content = agents_md.read_text()
@@ -53,9 +55,16 @@ def test_inject_agents_md_idempotent(tmp_path: Path) -> None:
     agents_md = tmp_path / "AGENTS.md"
     agents_md.write_text("# Project\n")
 
-    inject_agents_md(tmp_path)
-    inject_agents_md(tmp_path)
+    inject_agents_md(agents_md)
+    inject_agents_md(agents_md)
 
     content = agents_md.read_text()
     assert content.count(AGENTS_MD_MARKER_START) == 1
     assert content.count(AGENTS_MD_MARKER_END) == 1
+
+
+def test_inject_agents_md_creates_parent_dir(tmp_path: Path) -> None:
+    agents_md = tmp_path / "subdir" / "AGENTS.md"
+    result = inject_agents_md(agents_md)
+    assert result is True
+    assert agents_md.exists()

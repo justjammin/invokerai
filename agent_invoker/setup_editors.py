@@ -615,14 +615,16 @@ def inject_claude_md() -> bool:
     return True
 
 
-def inject_agents_md(target_dir: Path | None = None) -> bool:
-    if target_dir is None:
-        target_dir = Path.cwd()
+def inject_agents_md(agents_md: Path | None = None) -> bool:
+    if agents_md is None:
+        agents_md = Path.home() / ".agents" / "AGENTS.md"
 
-    agents_md = target_dir / "AGENTS.md"
+    agents_md.parent.mkdir(parents=True, exist_ok=True)
+
     if not agents_md.exists():
-        print(f"  AGENTS.md: not found in {target_dir} (skipped)")
-        return False
+        agents_md.write_text(AGENTS_MD_NODE + "\n")
+        print(f"  AGENTS.md: created → {agents_md}")
+        return True
 
     content = agents_md.read_text()
     if AGENTS_MD_MARKER_START in content:
@@ -696,8 +698,8 @@ def uninstall(purge: bool = False) -> None:
         else:
             print("  CLAUDE.md: block not found (skipped)")
 
-    # ── AGENTS.md in cwd ─────────────────────────────────────────────────────
-    agents_md = Path.cwd() / "AGENTS.md"
+    # ── ~/.agents/AGENTS.md ──────────────────────────────────────────────────
+    agents_md = Path.home() / ".agents" / "AGENTS.md"
     if agents_md.exists():
         import re
         content = agents_md.read_text()
