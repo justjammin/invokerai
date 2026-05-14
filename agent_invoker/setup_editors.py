@@ -15,32 +15,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-CLAUDE_MD_MARKER_START = "<!-- INVOKERAI-START -->"
-CLAUDE_MD_MARKER_END = "<!-- INVOKERAI-END -->"
+INVOKERAI_MARKER_START = "<!-- INVOKERAI-START -->"
+INVOKERAI_MARKER_END = "<!-- INVOKERAI-END -->"
 
-AGENTS_MD_MARKER_START = "<!-- INVOKERAI-START -->"
-AGENTS_MD_MARKER_END = "<!-- INVOKERAI-END -->"
+# Back-compat aliases used by inject functions and tests
+CLAUDE_MD_MARKER_START = INVOKERAI_MARKER_START
+CLAUDE_MD_MARKER_END = INVOKERAI_MARKER_END
+AGENTS_MD_MARKER_START = INVOKERAI_MARKER_START
+AGENTS_MD_MARKER_END = INVOKERAI_MARKER_END
 
-AGENTS_MD_NODE = """\
-<!-- INVOKERAI-START -->
-## InvokerAI — Agent Router
-
-Route all agent tasks via InvokerAI before doing any coding.
-
-**MCP (preferred):** `mcp__invokerai__spawn_specialist(task, domains=[...])`
-**CLI fallback:** `invoker spawn "TASK" --domains d1,d2`
-
-Canonical domains: `architecture` | `backend` | `frontend` | `database` | `devops` | `security` | `ml` | `testing` | `documentation` | `mobile` | `data` | `code-review`
-
-Returns: role, persona (system_prompt_fragment), tools, spawn_authorized, steps.
-
-## Communication Style
-
-Caveman ultra: drop articles/filler/hedging. Fragments OK. Abbreviate (DB/auth/config/req/res/fn/impl). X→Y for causality. Technical terms exact. Code/commits/PRs: normal English. Break character for security warnings and irreversible ops.
-<!-- INVOKERAI-END -->"""
-
-CLAUDE_MD_NODE = """\
-<!-- INVOKERAI-START -->
+_INVOKERAI_NODE_BODY = """\
 ## InvokerAI — Agent Router
 
 **BLOCKING REQUIREMENT:** NEVER call the `Agent` tool directly and NEVER do coding tasks directly. Always use
@@ -91,8 +75,10 @@ mcp__invokerai__spawn_specialist(task: str, domains: list[str])
 
 **SKILL BYPASS:** When running inside a skill invocation (/graphify, /kyoko, /hyperframes,
 /remotion, /weave, etc.), do NOT call mcp__invokerai__spawn_specialist. Skills manage their own
-agent spawning. InvokerAI routing applies only to direct user tasks.
-<!-- INVOKERAI-END -->"""
+agent spawning. InvokerAI routing applies only to direct user tasks."""
+
+CLAUDE_MD_NODE = f"{INVOKERAI_MARKER_START}\n{_INVOKERAI_NODE_BODY}\n{INVOKERAI_MARKER_END}"
+AGENTS_MD_NODE = CLAUDE_MD_NODE
 
 _HOOK_SCRIPT_PATH = Path.home() / ".invokerai" / "hooks" / "pre-agent.sh"
 
