@@ -232,6 +232,12 @@ invoker decompose "task"                     MAS pattern + skeleton steps
 
 Primary surface for Agent/MCP: `mcp__invokerai__spawn_specialist(task, domains=[...])`
 
+If MCP is unavailable (Cursor agent mode, Codex, or any harness where MCP args can't be passed), use the CLI equivalent from terminal — returns the same bundle and writes the spawn token:
+
+```bash
+invoker spawn "TASK" --domains d1,d2
+```
+
 ---
 
 ## The routing model

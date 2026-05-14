@@ -12,7 +12,7 @@ _SPAWN_TOKEN = Path.home() / ".invokerai" / "spawn_token"
 def main() -> None:
     # Peek at argv to decide: subcommand dispatch or bare task routing
     argv = sys.argv[1:]
-    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall", "decompose", "stop", "update"}
+    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall", "decompose", "stop", "update", "agents", "log-outcome"}
 
     if argv and argv[0] in known_commands:
         _dispatch_subcommand(argv)
@@ -65,7 +65,9 @@ def _handle_spawn(argv: list[str]) -> None:
     parser.add_argument("task", nargs="?")
     parser.add_argument("--registry", metavar="PATH")
     parser.add_argument("--no-log", action="store_true")
-    parser.add_argument("--persona", action="store_true", help="Include system_prompt_fragment in output")
+    parser.add_argument("--persona", action="store_true", help="Kept for backward compat; persona always included")
+    parser.add_argument("--domains", metavar="DOMAINS", help="Comma-separated domains, e.g. backend,testing")
+    parser.add_argument("--session-id", metavar="ID", dest="session_id", default=None)
     args = parser.parse_args(argv)
 
     task_text = args.task
@@ -76,11 +78,18 @@ def _handle_spawn(argv: list[str]) -> None:
         print(json.dumps({"error": "task is required"}))
         sys.exit(1)
 
+    domains = [d.strip() for d in args.domains.split(",") if d.strip()] if args.domains else None
+
     from agent_invoker.core import route
-    result = route(task_text, custom_registry=args.registry, log=not args.no_log)
+    result = route(task_text, custom_registry=args.registry, log=not args.no_log, domains=domains)
 
     _SPAWN_TOKEN.parent.mkdir(parents=True, exist_ok=True)
-    _SPAWN_TOKEN.write_text(str(int(time.time())))
+    _SPAWN_TOKEN.write_text(f"{result.spawn_count}:{int(time.time())}")
+
+    sid = args.session_id or "default"
+    from agent_invoker.core import append_session_log, update_session
+    update_session(sid, result.role, result.routing)
+    append_session_log(task_text, result.role, result.confidence, result.routing, domains)
 
     out: dict = {
         "routing": result.routing,
@@ -89,8 +98,9 @@ def _handle_spawn(argv: list[str]) -> None:
         "tools": result.tools,
         "source": result.source,
         "spawn_authorized": True,
+        "session_id": sid,
     }
-    if args.persona and result.persona:
+    if result.persona:
         out["persona"] = result.persona
     if result.routing == "orchestrate":
         out["pattern"] = result.pattern
@@ -232,6 +242,44 @@ def _handle_update(_argv: list[str]) -> None:
     print("Update complete. Restart Claude Code / Cursor / Kiro to pick up changes.")
 
 
+# ── agents — list registry ────────────────────────────────────────────────────
+
+def _handle_agents(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="invoker agents", add_help=False)
+    parser.add_argument("--category", metavar="NAME", default=None)
+    args = parser.parse_args(argv)
+
+    from agent_invoker.registry.loader import load_registry
+    try:
+        registry = load_registry()
+    except Exception:
+        registry = {}
+    cat = (args.category or "").lower()
+    agents = [
+        {"id": a.id, "category": a.category, "description": a.description, "orchestrate": a.orchestrate}
+        for a in registry.values()
+        if not cat or a.category.lower() == cat
+    ]
+    agents.sort(key=lambda a: (a["category"], a["id"]))
+    print(json.dumps({"agents": agents}, indent=2))
+
+
+# ── log-outcome — patch session log ──────────────────────────────────────────
+
+def _handle_log_outcome(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="invoker log-outcome", add_help=False)
+    parser.add_argument("date")
+    parser.add_argument("task_prefix")
+    parser.add_argument("corrections", type=int)
+    parser.add_argument("accepted", choices=["true", "false", "yes", "no", "1", "0"])
+    args = parser.parse_args(argv)
+
+    accepted = args.accepted.lower() in ("true", "yes", "1")
+    from agent_invoker.core import patch_session_log_outcome
+    result = patch_session_log_outcome(args.date, args.task_prefix, args.corrections, accepted)
+    print(json.dumps(result))
+
+
 # ── tools subcommand ──────────────────────────────────────────────────────────
 
 def _dispatch_subcommand(argv: list[str]) -> None:
@@ -270,6 +318,10 @@ def _dispatch_subcommand(argv: list[str]) -> None:
         _handle_stop(rest)
     elif command == "update":
         _handle_update(rest)
+    elif command == "agents":
+        _handle_agents(rest)
+    elif command == "log-outcome":
+        _handle_log_outcome(rest)
 
 
 def _handle_tools(argv: list[str]) -> None:
@@ -357,7 +409,8 @@ def _show_model_info() -> None:
 def _print_help() -> None:
     print("""Usage:
   invoker spawn "task"                             Route + write spawn token (primary surface, ~100 tok)
-  invoker spawn "task" --persona                   Route + token + include system_prompt_fragment
+  invoker spawn "task" --domains d1,d2             Route with domain hints (domains optional: --domains d1,d2)
+  invoker spawn "task" [--session-id ID]           Persist session ledger under named ID
   invoker confirm "task" "expected-role"           Subagent self-check — verify correct specialist
   invoker "task text"                              Route only (no token, no spawn)
   invoker --registry PATH "task text"              Use custom agent registry
@@ -365,6 +418,9 @@ def _print_help() -> None:
   invoker --model-info                             Show router phase + status
 
   invoker decompose "task"                         Detect MAS pattern + generate skeleton steps (orchestrate only)
+  invoker agents                                   List all available specialist agents
+  invoker agents --category backend                Filter by category
+  invoker log-outcome DATE PREFIX CORRECTIONS ACCEPTED  Append outcome metrics to session log
 
   invoker setup                                    Configure MCP + hooks for Claude Code, Cursor, Kiro, Copilot
   invoker uninstall                                Remove all InvokerAI config (hooks, MCP entries, CLAUDE.md block)

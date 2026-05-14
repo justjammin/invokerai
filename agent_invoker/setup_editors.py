@@ -18,12 +18,34 @@ from pathlib import Path
 CLAUDE_MD_MARKER_START = "<!-- INVOKERAI-START -->"
 CLAUDE_MD_MARKER_END = "<!-- INVOKERAI-END -->"
 
+AGENTS_MD_MARKER_START = "<!-- INVOKERAI-START -->"
+AGENTS_MD_MARKER_END = "<!-- INVOKERAI-END -->"
+
+AGENTS_MD_NODE = """\
+<!-- INVOKERAI-START -->
+## InvokerAI — Agent Router
+
+Route all agent tasks via InvokerAI before doing any coding.
+
+**MCP (preferred):** `mcp__invokerai__spawn_specialist(task, domains=[...])`
+**CLI fallback:** `invoker spawn "TASK" --domains d1,d2`
+
+Canonical domains: `architecture` | `backend` | `frontend` | `database` | `devops` | `security` | `ml` | `testing` | `documentation` | `mobile` | `data` | `code-review`
+
+Returns: role, persona (system_prompt_fragment), tools, spawn_authorized, steps.
+
+## Communication Style
+
+Caveman ultra: drop articles/filler/hedging. Fragments OK. Abbreviate (DB/auth/config/req/res/fn/impl). X→Y for causality. Technical terms exact. Code/commits/PRs: normal English. Break character for security warnings and irreversible ops.
+<!-- INVOKERAI-END -->"""
+
 CLAUDE_MD_NODE = """\
 <!-- INVOKERAI-START -->
 ## InvokerAI — Agent Router
 
 **BLOCKING REQUIREMENT:** NEVER call the `Agent` tool directly and NEVER do coding tasks directly. Always use
 `mcp__invokerai__spawn_specialist(task, domains=[...])` — it routes AND returns the execution bundle.
+If MCP is unavailable: `invoker spawn "TASK" --domains d1,d2` from terminal returns the same bundle and writes the spawn token.
 
 **ROLE: orchestrator/planner ONLY.** Never write code. Never read files for implementation purposes.
 Only: plan, decompose, identify domains, call spawn_specialist.
@@ -250,6 +272,7 @@ _SUBAGENT_HOOK_COMMAND = (
     "ROLE: orchestrator/planner ONLY. Never write code. Never implement directly. "
     "Identify 1+ domains from: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
     "Call mcp__invokerai__spawn_specialist(task, domains=[...]) — returns execution bundle + spawns specialist+reviewer. "
+    "MCP unavailable? Run: invoker spawn \\\"TASK\\\" --domains d1,d2 from terminal — same bundle, same token. "
     "CAVEMAN MODE ULTRA: drop articles/filler/hedging/pleasantries. Fragments OK. Short synonyms. "
     "Abbreviate (DB/auth/config/req/res/fn/impl). Arrows for causality (X->Y). One word when one word enough. "
     "Code blocks unchanged. Technical terms exact.\"}}'"
@@ -260,7 +283,8 @@ _PROMPT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":"
     "\"InvokerAI: route agent tasks via mcp__invokerai__spawn_specialist(task, domains=[...]). "
     "Identify domains first: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
-    "Never spawn Agent directly. Never do coding tasks directly — only plan and orchestrate.\"}}'"
+    "Never spawn Agent directly. Never do coding tasks directly — only plan and orchestrate. "
+    "MCP unavailable? Use: invoker spawn \\\"TASK\\\" --domains d1,d2 from terminal.\"}}'"
 )
 _PROMPT_HOOK_MARKER = "InvokerAI"
 _PROMPT_HOOK_CURRENT_MARKER = "mcp__invokerai__spawn_specialist"
@@ -591,6 +615,33 @@ def inject_claude_md() -> bool:
     return True
 
 
+def inject_agents_md(target_dir: Path | None = None) -> bool:
+    if target_dir is None:
+        target_dir = Path.cwd()
+
+    agents_md = target_dir / "AGENTS.md"
+    if not agents_md.exists():
+        print(f"  AGENTS.md: not found in {target_dir} (skipped)")
+        return False
+
+    content = agents_md.read_text()
+    if AGENTS_MD_MARKER_START in content:
+        import re
+        updated = re.sub(
+            rf"{re.escape(AGENTS_MD_MARKER_START)}.*?{re.escape(AGENTS_MD_MARKER_END)}",
+            lambda _m: AGENTS_MD_NODE,
+            content,
+            flags=re.DOTALL,
+        )
+        agents_md.write_text(updated)
+        print(f"  AGENTS.md: node updated → {agents_md}")
+    else:
+        agents_md.write_text(content + "\n\n" + AGENTS_MD_NODE + "\n")
+        print(f"  AGENTS.md: node appended → {agents_md}")
+
+    return True
+
+
 def copy_skill(pkg_dir: Path) -> bool:
     src = pkg_dir / "skills" / "invokerai"
     dest = Path.home() / ".claude" / "skills" / "invokerai"
@@ -616,6 +667,7 @@ def run(pkg_dir: Path | None = None) -> None:
     setup_kiro(pkg_dir)
     setup_copilot(pkg_dir)
     inject_claude_md()
+    inject_agents_md()
     copy_skill(pkg_dir)
     print()
     print("Done. Restart Claude Code / Cursor / Kiro to activate.")
@@ -643,6 +695,23 @@ def uninstall(purge: bool = False) -> None:
             print("  CLAUDE.md: InvokerAI block removed")
         else:
             print("  CLAUDE.md: block not found (skipped)")
+
+    # ── AGENTS.md in cwd ─────────────────────────────────────────────────────
+    agents_md = Path.cwd() / "AGENTS.md"
+    if agents_md.exists():
+        import re
+        content = agents_md.read_text()
+        if AGENTS_MD_MARKER_START in content:
+            updated = re.sub(
+                rf"\n*{re.escape(AGENTS_MD_MARKER_START)}.*?{re.escape(AGENTS_MD_MARKER_END)}\n*",
+                "\n",
+                content,
+                flags=re.DOTALL,
+            )
+            agents_md.write_text(updated)
+            print("  AGENTS.md: InvokerAI block removed")
+        else:
+            print("  AGENTS.md: block not found (skipped)")
 
     # ── ~/.claude.json MCP entry ──────────────────────────────────────────────
     claude_json_path = Path.home() / ".claude.json"

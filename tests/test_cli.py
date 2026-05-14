@@ -48,12 +48,16 @@ class TestSpawn:
         _SPAWN_TOKEN.unlink(missing_ok=True)
         run_spawn(["add dark mode to settings panel"])
         assert _SPAWN_TOKEN.exists()
-        ts = int(_SPAWN_TOKEN.read_text())
+        raw = _SPAWN_TOKEN.read_text()
+        _count, ts_str = raw.split(":", 1)
+        ts = int(ts_str)
         assert abs(ts - int(time.time())) < 5
 
     def test_token_timestamp_fresh(self):
         run_spawn(["fix the login bug"])
-        ts = int(_SPAWN_TOKEN.read_text())
+        raw = _SPAWN_TOKEN.read_text()
+        _count, ts_str = raw.split(":", 1)
+        ts = int(ts_str)
         age = int(time.time()) - ts
         assert age < 30
 
@@ -66,9 +70,9 @@ class TestSpawn:
         assert "role" in out
         assert isinstance(out["tools"], list)
 
-    def test_no_persona_by_default(self):
+    def test_persona_included_by_default(self):
         out = run_spawn(["build a new API endpoint"])
-        assert "persona" not in out
+        assert "persona" in out
 
     def test_persona_flag_includes_persona(self):
         buf = StringIO()
@@ -109,10 +113,10 @@ class TestSpawn:
 
     def test_token_overwritten_on_second_call(self):
         run_spawn(["first task"])
-        ts1 = int(_SPAWN_TOKEN.read_text())
+        ts1 = int(_SPAWN_TOKEN.read_text().split(":", 1)[1])
         time.sleep(1)
         run_spawn(["second task"])
-        ts2 = int(_SPAWN_TOKEN.read_text())
+        ts2 = int(_SPAWN_TOKEN.read_text().split(":", 1)[1])
         assert ts2 >= ts1
 
 
@@ -351,3 +355,89 @@ class TestUninstall:
         from agent_invoker.setup_editors import CLAUDE_MD_MARKER_START, CLAUDE_MD_MARKER_END, CLAUDE_MD_NODE
         assert CLAUDE_MD_MARKER_START in CLAUDE_MD_NODE
         assert CLAUDE_MD_MARKER_END in CLAUDE_MD_NODE
+
+
+# ---------------------------------------------------------------------------
+# agents CLI
+# ---------------------------------------------------------------------------
+
+def run_agents(args: list[str]) -> dict:
+    buf = StringIO()
+    with patch("sys.stdout", buf):
+        from agent_invoker.cli import _handle_agents
+        _handle_agents(args)
+    return json.loads(buf.getvalue())
+
+
+class TestAgentsCli:
+    def test_returns_agents_shape(self):
+        out = run_agents([])
+        assert "agents" in out
+        assert isinstance(out["agents"], list)
+        for agent in out["agents"]:
+            assert "id" in agent
+            assert "category" in agent
+            assert "description" in agent
+            assert "orchestrate" in agent
+
+    def test_filter_by_category(self):
+        out = run_agents(["--category", "backend"])
+        assert "agents" in out
+        for agent in out["agents"]:
+            assert agent["category"].lower() == "backend"
+
+    def test_sorted_by_category_then_id(self):
+        out = run_agents([])
+        pairs = [(a["category"], a["id"]) for a in out["agents"]]
+        assert pairs == sorted(pairs)
+
+    def test_unknown_category_returns_empty(self):
+        out = run_agents(["--category", "nonexistent_category_xyz"])
+        assert out["agents"] == []
+
+
+# ---------------------------------------------------------------------------
+# log-outcome CLI
+# ---------------------------------------------------------------------------
+
+def run_log_outcome(args: list[str]) -> dict:
+    buf = StringIO()
+    with patch("sys.stdout", buf):
+        from agent_invoker.cli import _handle_log_outcome
+        _handle_log_outcome(args)
+    return json.loads(buf.getvalue())
+
+
+class TestLogOutcomeCli:
+    def test_patches_session_log(self, tmp_path, monkeypatch):
+        log = tmp_path / "sessions.md"
+        log.write_text(
+            "\n### 2026-05-13 — Add CLI parity\n"
+            "- **Role selected:** backend-developer\n"
+            "- **Confidence:** 90\n"
+        )
+        monkeypatch.setattr("agent_invoker.core._SESSION_LOG", log)
+        out = run_log_outcome(["2026-05-13", "Add CLI parity", "2", "true"])
+        assert out == {"ok": True}
+        content = log.read_text()
+        assert "**Correction cycles:** 2" in content
+        assert "**First-pass accepted:** yes" in content
+
+    def test_entry_not_found_returns_error(self, tmp_path, monkeypatch):
+        log = tmp_path / "sessions.md"
+        log.write_text("\n### 2026-05-13 — Some other task\n- **Role selected:** backend-developer\n")
+        monkeypatch.setattr("agent_invoker.core._SESSION_LOG", log)
+        out = run_log_outcome(["2026-05-13", "Nonexistent prefix", "0", "false"])
+        assert out["ok"] is False
+        assert "error" in out
+
+    def test_accepted_false_writes_no(self, tmp_path, monkeypatch):
+        log = tmp_path / "sessions.md"
+        log.write_text(
+            "\n### 2026-05-13 — Fix auth bug\n"
+            "- **Role selected:** backend-developer\n"
+        )
+        monkeypatch.setattr("agent_invoker.core._SESSION_LOG", log)
+        out = run_log_outcome(["2026-05-13", "Fix auth bug", "1", "false"])
+        assert out == {"ok": True}
+        assert "**First-pass accepted:** no" in log.read_text()

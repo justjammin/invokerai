@@ -20,13 +20,11 @@ from agent_invoker.mcp_server import (
     decompose_task,
     _agent_resources,
     _read_agent_resource,
-    _get_session,
-    _update_session,
-    _LEDGER,
     _SPAWN_TOKEN,
     SERVER_INFO,
     mcp,
 )
+from agent_invoker.core import get_session, update_session, _LEDGER_PATH, _LEDGER_TTL
 
 
 # ---------------------------------------------------------------------------
@@ -46,21 +44,6 @@ async def _tool_call(name: str, args: dict):
 def call_tool(name: str, args: dict):
     return _run(_tool_call(name, args))
 
-
-@pytest.fixture(autouse=True)
-def clean_ledger():
-    _LEDGER.clear()
-    yield
-    _LEDGER.clear()
-
-
-@pytest.fixture(autouse=True)
-def clean_token():
-    if _SPAWN_TOKEN.exists():
-        _SPAWN_TOKEN.unlink()
-    yield
-    if _SPAWN_TOKEN.exists():
-        _SPAWN_TOKEN.unlink()
 
 
 # ---------------------------------------------------------------------------
@@ -371,40 +354,46 @@ class TestResourcesHelpers:
 
 class TestSessionLedger:
     def test_update_session_stores_role(self):
-        _update_session("sess-1", "debugger", "direct")
-        s = _get_session("sess-1")
+        update_session("sess-1", "debugger", "direct")
+        s = get_session("sess-1")
         assert s["active_role"] == "debugger"
 
     def test_get_session_returns_stored_data(self):
-        _update_session("sess-2", "backend-developer", "direct")
-        s = _get_session("sess-2")
+        update_session("sess-2", "backend-developer", "direct")
+        s = get_session("sess-2")
         assert s["active_role"] == "backend-developer"
 
     def test_prior_routes_appended(self):
-        _update_session("sess-3", "debugger", "direct")
-        _update_session("sess-3", "frontend-developer", "direct")
-        s = _get_session("sess-3")
+        update_session("sess-3", "debugger", "direct")
+        update_session("sess-3", "frontend-developer", "direct")
+        s = get_session("sess-3")
         assert len(s["prior_routes"]) == 2
         assert s["prior_routes"][0]["role"] == "debugger"
         assert s["prior_routes"][1]["role"] == "frontend-developer"
 
     def test_new_session_has_none_role(self):
-        s = _get_session("brand-new-session-xyz")
+        s = get_session("brand-new-session-xyz")
         assert s["active_role"] is None
 
     def test_ttl_expiry_clears_stale_entry(self):
-        LEDGER_TTL = 1800
+        import agent_invoker.core as _core
         stale_id = "stale-session"
-        _LEDGER[stale_id] = {
-            "active_role": "debugger",
-            "prior_routes": [],
-            "last_seen": time.time() - LEDGER_TTL - 1,
+        stale_data = {
+            stale_id: {
+                "active_role": "debugger",
+                "prior_routes": [],
+                "last_seen": time.time() - _LEDGER_TTL - 1,
+            }
         }
-        _get_session("trigger-cleanup")
-        assert stale_id not in _LEDGER
+        ledger = _core._LEDGER_PATH
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text(json.dumps(stale_data))
+        get_session("trigger-cleanup")
+        data = json.loads(ledger.read_text())
+        assert stale_id not in data
 
     def test_prior_routes_capped_at_20(self):
         for i in range(25):
-            _update_session("sess-cap", f"role-{i}", "direct")
-        s = _get_session("sess-cap")
+            update_session("sess-cap", f"role-{i}", "direct")
+        s = get_session("sess-cap")
         assert len(s["prior_routes"]) <= 20
