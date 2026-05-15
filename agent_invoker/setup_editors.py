@@ -455,11 +455,29 @@ def setup_claude_code(pkg_dir: Path) -> bool:
     return True
 
 
+def _cursor_installed() -> bool:
+    IS_WIN = sys.platform == "win32"
+    IS_MAC = sys.platform == "darwin"
+    candidates = []
+    if IS_MAC:
+        candidates = [Path("/Applications/Cursor.app"), Path.home() / "Applications" / "Cursor.app"]
+    elif IS_WIN:
+        candidates = [
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Cursor" / "Cursor.exe",
+            Path(os.environ.get("PROGRAMFILES", "")) / "Cursor" / "Cursor.exe",
+        ]
+    else:
+        candidates = [Path("/usr/bin/cursor"), Path("/usr/local/bin/cursor"), Path.home() / ".local" / "bin" / "cursor"]
+    return any(p.exists() for p in candidates)
+
+
 def setup_cursor(pkg_dir: Path) -> bool:
     cursor_mcp = Path.home() / ".cursor" / "mcp.json"
     if not cursor_mcp.parent.exists():
-        print("  Cursor: not installed, skipping")
-        return False
+        if not _cursor_installed():
+            print("  Cursor: not installed, skipping")
+            return False
+        cursor_mcp.parent.mkdir(parents=True, exist_ok=True)
 
     config: dict = {"mcpServers": {}}
     if cursor_mcp.exists():

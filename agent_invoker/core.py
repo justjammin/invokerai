@@ -97,6 +97,7 @@ _ROLE_DOMAIN: dict[str, str] = {
     "incident-response-commander": "devops",
     "software-architect": "architecture",
     "sre": "devops",
+    "code-simplifier": "code-review",
 }
 
 _SUBDOMAIN_TRIGGERS: list[tuple[str, str, list[str]]] = [
@@ -142,8 +143,14 @@ def _resolve_agent_file(relative: str) -> "Path | None":
     return None
 
 
+def _normalize_role(role: str) -> str:
+    """Strip plugin namespace from role (e.g. 'plugin:agent-name' → 'agent-name')."""
+    return role.split(":")[-1]
+
+
 def _load_persona(role: str, task: str = "") -> dict:
-    domain = _ROLE_DOMAIN.get(role)
+    normalized = _normalize_role(role)
+    domain = _ROLE_DOMAIN.get(normalized)
     t = task.lower()
     tiers: list[str] = []
 
@@ -178,7 +185,7 @@ def _load_persona(role: str, task: str = "") -> dict:
         }
 
     # Flat-file fallback (old naming convention)
-    flat_file = _resolve_agent_file(f"{role}.md")
+    flat_file = _resolve_agent_file(f"{normalized}.md")
     if flat_file:
         return {
             "resource_uri": f"agent://{role}",
@@ -485,6 +492,7 @@ _ROLE_LABELS: dict[str, str] = {
     "fullstack-developer": "integration",
     "mobile-developer": "mobile layer",
     "data-engineer": "data pipeline",
+    "code-simplifier": "code polish",
 }
 
 
@@ -626,7 +634,11 @@ def _generate_steps_v2(domains: list[str], task: str) -> list[dict]:
     steps.append({"step": step_num, "role": reviewer, "action": "Review output", "parallel": False})
     step_num += 1
 
-    # Step N+1: DEPLOY PLAN (only if devops)
+    if execute_domains:
+        steps.append({"step": step_num, "role": "code-simplifier", "action": "Simplify and polish implementation", "parallel": False})
+        step_num += 1
+
+    # DEPLOY PLAN (only if devops)
     if "devops" in domains:
         steps.append({"step": step_num, "role": "cloud-architect", "action": "Write deployment plan", "parallel": False})
 

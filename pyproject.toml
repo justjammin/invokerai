@@ -50,6 +50,7 @@ Repository = "https://github.com/justjammin/invokerai"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent_invoker"]
+artifacts = ["agent_invoker/registry/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
