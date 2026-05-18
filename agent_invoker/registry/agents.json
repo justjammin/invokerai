@@ -655,6 +655,43 @@
       "orchestrate": false
     },
     {
+      "id": "integration-engineer",
+      "category": "implementation",
+      "description": "Wires parallel specialist outputs into a cohesive system. Identifies interface mismatches and writes glue, adapter, and bridge code.",
+      "domains": [
+        "backend",
+        "frontend",
+        "database"
+      ],
+      "triggers": [
+        "integration",
+        "wire outputs",
+        "glue code",
+        "interface mismatch",
+        "adapter",
+        "bridge layer",
+        "wire parallel"
+      ],
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "mcp__lean-ctx__ctx_read",
+        "mcp__lean-ctx__ctx_shell",
+        "mcp__lean-ctx__ctx_search",
+        "mcp__lean-ctx__ctx_tree",
+        "mcp__lean-ctx__ctx_session",
+        "mcp__lean-ctx__ctx_knowledge",
+        "mcp__lean-ctx__ctx_edit",
+        "mcp__lean-ctx__ctx_overview",
+        "mcp__lean-ctx__ctx_preload"
+      ],
+      "orchestrate": false
+    },
+    {
       "id": "mcp-developer",
       "category": "coding",
       "description": "Builds, debugs, and optimizes Model Context Protocol servers and clients",

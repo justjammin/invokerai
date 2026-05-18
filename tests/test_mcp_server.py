@@ -87,9 +87,9 @@ class TestRouteTask:
         for field in ("routing", "role", "confidence", "tools", "session_id"):
             assert field in result, f"missing field: {field}"
 
-    def test_routing_is_always_orchestrate(self):
+    def test_routing_reflects_task_complexity(self):
         result = route_task(task="fix the null pointer crash in auth.py")
-        assert result["routing"] == "orchestrate"
+        assert result["routing"] == "solo"
 
     def test_empty_task_raises(self):
         with pytest.raises(Exception):
@@ -113,7 +113,7 @@ class TestRouteTask:
 
     def test_explicit_domains_used(self):
         result = route_task(task="build an API", domains=["backend", "testing"])
-        assert result["routing"] == "orchestrate"
+        assert result["routing"] == "crew"
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ class TestSpawnSpecialist:
             task="build a REST API with frontend and database",
             domains=["backend", "frontend", "database"],
         )
-        assert result["routing"] == "orchestrate"
+        assert result["routing"] == "crew"
         assert "pattern" in result
         assert isinstance(result["steps"], list)
         assert len(result["steps"]) > 0
@@ -168,10 +168,10 @@ class TestSpawnSpecialist:
 
     def test_single_domain_still_has_steps(self):
         result = spawn_specialist(task="fix the null pointer crash in auth.py")
-        assert result["routing"] == "orchestrate"
+        assert result["routing"] == "solo"
         assert "pattern" in result
         assert isinstance(result["steps"], list)
-        assert len(result["steps"]) >= 2
+        assert len(result["steps"]) >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -354,18 +354,18 @@ class TestResourcesHelpers:
 
 class TestSessionLedger:
     def test_update_session_stores_role(self):
-        update_session("sess-1", "debugger", "direct")
+        update_session("sess-1", "debugger", "solo")
         s = get_session("sess-1")
         assert s["active_role"] == "debugger"
 
     def test_get_session_returns_stored_data(self):
-        update_session("sess-2", "backend-developer", "direct")
+        update_session("sess-2", "backend-developer", "solo")
         s = get_session("sess-2")
         assert s["active_role"] == "backend-developer"
 
     def test_prior_routes_appended(self):
-        update_session("sess-3", "debugger", "direct")
-        update_session("sess-3", "frontend-developer", "direct")
+        update_session("sess-3", "debugger", "solo")
+        update_session("sess-3", "frontend-developer", "solo")
         s = get_session("sess-3")
         assert len(s["prior_routes"]) == 2
         assert s["prior_routes"][0]["role"] == "debugger"
@@ -394,6 +394,6 @@ class TestSessionLedger:
 
     def test_prior_routes_capped_at_20(self):
         for i in range(25):
-            update_session("sess-cap", f"role-{i}", "direct")
+            update_session("sess-cap", f"role-{i}", "solo")
         s = get_session("sess-cap")
         assert len(s["prior_routes"]) <= 20

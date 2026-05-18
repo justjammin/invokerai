@@ -85,17 +85,18 @@ def spawn_specialist(
     domains: list[str] | None = None,
     custom_registry: str | None = None,
     session_id: str | None = None,
+    complexity: str | None = None,
 ) -> dict:
     if not task or not task.strip():
         raise ValueError("task is required")
     start = time.time()
     from agent_invoker.core import route
     sid = session_id or "default"
-    result = route(task, custom_registry=custom_registry, log=True, domains=domains)
+    result = route(task, custom_registry=custom_registry, log=True, domains=domains, complexity=complexity)
     update_session(sid, result.role, result.routing)
     _write_spawn_token(result.spawn_count)
     out = {
-        "routing": "orchestrate",
+        "routing": result.routing,
         "role": result.role,
         "confidence": result.confidence,
         "tools": result.tools,
@@ -133,7 +134,7 @@ def route_task(
     result = route(task, custom_registry=custom_registry, log=True, domains=domains)
     update_session(sid, result.role, result.routing)
     out = {
-        "routing": "orchestrate",
+        "routing": result.routing,
         "role": result.role,
         "confidence": result.confidence,
         "tools": result.tools,

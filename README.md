@@ -4,13 +4,25 @@
 
 # InvokerAI
 
-Okay so. I got tired of watching AI agents spawn the wrong specialist and just wing it. So I built this.
+**The problem:** Large tasks dumped into one model window bloat context. Generalist reasoning on specialized domains—like "fix the auth flow AND refactor the DB schema"—yields compressed reasoning, lower-quality output, and serial bottlenecks.
 
-InvokerAI is a local routing brain that wires into your AI editors. Install it, run one setup command, and from that point every agent task gets classified and routed to the right specialist before Claude touches anything. Role, prompt fragment, tool allowlist — all resolved. You keep working. InvokerAI keeps the agents honest.
+**The subagent solution:**
+- **Decomposition** — Complex tasks break into focused subtasks. Each agent operates in isolation with only the context it needs.
+- **Specialization** — A domain-tuned persona beats generic reasoning. A backend engineer sees backend patterns; a test engineer sees coverage gaps the generalist missed.
+- **Parallelism** — Independent subtasks run concurrently instead of sequentially.
+- **Noise reduction** — Less context window per agent = less hallucination surface, stronger reasoning.
 
-No cloud. No API keys. No config file roulette. Runs entirely on your machine.
+**InvokerAI's job:** Eliminate manual agent selection. Pass a task and domains. InvokerAI routes to the right specialist(s) with zero configuration.
 
-Extracted from [LENA](https://github.com/justjammin/lena), the AI orchestrator I've been running on Claude Code. After using this routing logic daily I figured it deserved its own thing.
+What it does:
+- **Automatic routing** — Classify task, find the right role, inject domain-specific system prompt (stacked across 3 tiers: universal rules → language patterns → specialist depth).
+- **Multi-agent orchestration** — Detect task patterns (pipeline, parallel, feedback loop, supervisor, planning-first, hierarchical) and generate execution steps with correct sequencing. No configuration required.
+- **Complexity-aware gating** — Simple tasks get direct routing. Complex tasks get planning + integration + review steps injected. No bloat on tiny changes.
+- **Persona composition** — Load role, tool allowlist, and behavioral rules from agent registry. Spawned agents get a compiled identity before they run.
+
+No cloud. No API keys. No config file editing. Runs entirely on your machine.
+
+Extracted from [LENA](https://github.com/justjammin/lena), the AI orchestrator I've been running on Claude Code. After using this routing logic daily it deserved its own thing.
 
 ---
 

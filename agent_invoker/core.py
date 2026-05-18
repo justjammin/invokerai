@@ -98,6 +98,7 @@ _ROLE_DOMAIN: dict[str, str] = {
     "software-architect": "architecture",
     "sre": "devops",
     "code-simplifier": "code-review",
+    "integration-engineer": "architecture",
 }
 
 _SUBDOMAIN_TRIGGERS: list[tuple[str, str, list[str]]] = [
@@ -275,17 +276,35 @@ def update_session(session_id: str, role: str | None, routing: str) -> None:
         pass
 
 
+def _complexity_score(task: str) -> str:
+    t = task.lower()
+    if re.search(r'\b(just|quick|simple|minor|fix|typo|rename)\b', t):
+        return "low"
+    if re.search(r'\b(redesign|migrate|refactor|comprehensive|platform|entire|system|end.to.end)\b', t):
+        return "high"
+    words = len(task.split())
+    if words > 80:
+        return "high"
+    if words > 30:
+        return "medium"
+    return "low"
+
+
 def route(
     task: str,
     custom_registry: str | None = None,
     log: bool = True,
     domains: list[str] | None = None,
     session_id: str | None = None,
+    complexity: str | None = None,
 ) -> RoutingResult:
     registry = load_registry(custom_registry)
 
+    if complexity is None:
+        complexity = _complexity_score(task)
+
     if domains:
-        decomp = _decompose_internal(task, registry, explicit_domains=domains)
+        decomp = _decompose_internal(task, registry, explicit_domains=domains, complexity=complexity)
         execute_roles = [
             s["role"] for s in decomp.steps
             if s["role"] not in ("architect-reviewer", "code-reviewer", "cloud-architect")
@@ -293,7 +312,7 @@ def route(
         role = execute_roles[0] if execute_roles else _EXPLICIT_DOMAIN_ROLE.get(domains[0])
         confidence = 90
         source = "domains"
-        routing = "orchestrate"
+        routing = "crew"
         pattern = decomp.pattern
         steps = decomp.steps
     else:
@@ -315,18 +334,18 @@ def route(
         else:
             role = interim.get("suggested_role")
 
-        decomp = _decompose_internal(task, registry)
+        decomp = _decompose_internal(task, registry, complexity=complexity)
         pattern = decomp.pattern
         steps = decomp.steps
 
         if not ml_determined_routing:
             if len(matches) >= 2:
                 categories = {m["category"] for m in matches}
-                routing = "orchestrate" if len(categories) >= 2 else "direct"
+                routing = "crew" if len(categories) >= 2 else "solo"
             else:
-                routing = "direct"
+                routing = "solo"
         else:
-            routing = interim.get("routing", "orchestrate")
+            routing = interim.get("routing", "crew")
 
     agent = registry.get(role or "")
     tools = agent.tools if agent else []
@@ -410,7 +429,7 @@ def _regex_score(task: str, registry: dict[str, Agent]) -> dict:
     role = _suggest_role(t, imp_verbs, registry)
 
     return {
-        "routing": "orchestrate" if net > 0 else "direct",
+        "routing": "crew" if net > 0 else "solo",
         "suggested_role": role,
         "confidence": confidence,
         "source": "regex",
@@ -493,6 +512,7 @@ _ROLE_LABELS: dict[str, str] = {
     "mobile-developer": "mobile layer",
     "data-engineer": "data pipeline",
     "code-simplifier": "code polish",
+    "integration-engineer": "integration layer",
 }
 
 
@@ -530,6 +550,7 @@ def _generate_steps(
     pattern: str,
     domain_roles: list[tuple[str, str]],
     primary_role: str,
+    complexity: str = "medium",
 ) -> list[dict]:
     fallback = domain_roles if domain_roles else [(None, primary_role)]
 
@@ -548,11 +569,9 @@ def _generate_steps(
         return steps
 
     if pattern == PATTERN_FEEDBACK_LOOP:
-        generator = primary_role
         return [
-            {"step": 1, "role": generator, "action": "Initial implementation", "parallel": False},
-            {"step": 2, "role": "code-reviewer", "action": "Review and critique", "parallel": False},
-            {"step": 3, "role": generator, "action": "Revise per feedback", "parallel": False},
+            {"step": 1, "role": "code-reviewer", "action": "Audit: quality, security, correctness", "parallel": False},
+            {"step": 2, "role": "code-simplifier", "action": "Apply fixes and polish", "parallel": False},
         ]
 
     if pattern == PATTERN_PLAN_THEN_EXECUTE:
@@ -567,7 +586,8 @@ def _generate_steps(
         for i, (domain, role) in enumerate(fallback[:4], start=1):
             label = _ROLE_LABELS.get(role, domain or "task")
             steps.append({"step": i, "role": role, "action": f"Implement {label}", "parallel": True})
-        steps.append({"step": len(steps) + 1, "role": "fullstack-developer", "action": "Integration and wiring", "parallel": False})
+        if complexity == "high":
+            steps.append({"step": len(steps) + 1, "role": "integration-engineer", "action": "Wire parallel outputs: resolve interface mismatches, produce integration glue", "parallel": False})
         return steps
 
     if pattern == PATTERN_SUPERVISOR:
@@ -593,7 +613,7 @@ def _generate_steps(
     return steps
 
 
-def _generate_steps_v2(domains: list[str], task: str) -> list[dict]:
+def _generate_steps_v2(domains: list[str], task: str, complexity: str = "medium") -> list[dict]:
     """Universal MAS structure: PLAN → EXECUTE → REVIEW → DEPLOY(optional)."""
     step_num = 1
     steps: list[dict] = []
@@ -601,6 +621,8 @@ def _generate_steps_v2(domains: list[str], task: str) -> list[dict]:
 
     if code_review_only:
         steps.append({"step": step_num, "role": "code-reviewer", "action": "Review code quality and issues", "parallel": False})
+        step_num += 1
+        steps.append({"step": step_num, "role": "code-simplifier", "action": "Apply fixes and polish", "parallel": False})
         return steps
 
     # Step 1: PLAN — only if architecture domain explicitly requested
@@ -625,8 +647,8 @@ def _generate_steps_v2(domains: list[str], task: str) -> list[dict]:
         steps.append({"step": step_num, "role": role, "action": f"Implement {label}", "parallel": is_parallel})
         step_num += 1
 
-    if is_parallel:
-        steps.append({"step": step_num, "role": "fullstack-developer", "action": "Integration and wiring", "parallel": False})
+    if is_parallel and complexity == "high":
+        steps.append({"step": step_num, "role": "integration-engineer", "action": "Wire parallel outputs: resolve interface mismatches, produce integration glue", "parallel": False})
         step_num += 1
 
     # Step N: REVIEW
@@ -634,8 +656,10 @@ def _generate_steps_v2(domains: list[str], task: str) -> list[dict]:
     steps.append({"step": step_num, "role": reviewer, "action": "Review output", "parallel": False})
     step_num += 1
 
-    if execute_domains:
-        steps.append({"step": step_num, "role": "code-simplifier", "action": "Simplify and polish implementation", "parallel": False})
+    if "code-review" in domains:
+        steps.append({"step": step_num, "role": "code-reviewer", "action": "Review code quality and issues", "parallel": False})
+        step_num += 1
+        steps.append({"step": step_num, "role": "code-simplifier", "action": "Apply fixes and polish", "parallel": False})
         step_num += 1
 
     # DEPLOY PLAN (only if devops)
@@ -645,11 +669,11 @@ def _generate_steps_v2(domains: list[str], task: str) -> list[dict]:
     return steps
 
 
-def _decompose_internal(task: str, registry: dict, explicit_domains: list[str] | None = None) -> "DecomposeResult":
+def _decompose_internal(task: str, registry: dict, explicit_domains: list[str] | None = None, complexity: str = "medium") -> "DecomposeResult":
     t = task.lower()
 
     if explicit_domains:
-        steps = _generate_steps_v2(explicit_domains, task)
+        steps = _generate_steps_v2(explicit_domains, task, complexity=complexity)
         if _is_code_review_only(explicit_domains):
             pattern = PATTERN_FEEDBACK_LOOP
         elif len([d for d in explicit_domains if d not in ("architecture", "code-review", "devops")]) >= 3:
@@ -667,14 +691,16 @@ def _decompose_internal(task: str, registry: dict, explicit_domains: list[str] |
     pattern = _detect_pattern(t, domain_hits)
     dr = _domain_roles(t)
     primary_role = _suggest_role(t, imp_verbs, registry)
-    steps = _generate_steps(t, pattern, dr, primary_role)
+    steps = _generate_steps(t, pattern, dr, primary_role, complexity=complexity)
     return DecomposeResult(pattern=pattern, steps=steps, domain_roles=dr)
 
 
-def decompose(task: str, custom_registry: str | None = None, domains: list[str] | None = None) -> "DecomposeResult":
+def decompose(task: str, custom_registry: str | None = None, domains: list[str] | None = None, complexity: str | None = None) -> "DecomposeResult":
     """Detect orchestration pattern and generate skeleton steps for a multi-agent task."""
     registry = load_registry(custom_registry)
-    return _decompose_internal(task, registry, explicit_domains=domains)
+    if complexity is None:
+        complexity = _complexity_score(task)
+    return _decompose_internal(task, registry, explicit_domains=domains, complexity=complexity)
 
 
 _CATEGORY_PRIORITY = {

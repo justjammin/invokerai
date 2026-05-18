@@ -119,18 +119,18 @@ class TestMultiDomainRouting:
             "build the react frontend and fastapi backend with postgres database",
             log=False,
         )
-        assert r.routing in ("orchestrate", "direct")
+        assert r.routing in ("crew", "solo")
 
     def test_kubernetes_cluster_monitoring_routing(self):
         r = route("build and deploy a kubernetes cluster with monitoring", log=False)
-        assert r.routing in ("orchestrate", "direct")
+        assert r.routing in ("crew", "solo")
 
     def test_orchestrate_has_non_empty_steps(self):
         r = route(
             "build the react frontend and fastapi backend with postgres database",
             log=False,
         )
-        if r.routing == "orchestrate":
+        if r.routing == "crew":
             assert isinstance(r.steps, list)
             assert len(r.steps) > 0
 

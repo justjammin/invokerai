@@ -68,6 +68,7 @@ def _handle_spawn(argv: list[str]) -> None:
     parser.add_argument("--persona", action="store_true", help="Kept for backward compat; persona always included")
     parser.add_argument("--domains", metavar="DOMAINS", help="Comma-separated domains, e.g. backend,testing")
     parser.add_argument("--session-id", metavar="ID", dest="session_id", default=None)
+    parser.add_argument("--complexity", metavar="LEVEL", choices=["low", "medium", "high"], default=None)
     args = parser.parse_args(argv)
 
     task_text = args.task
@@ -81,7 +82,7 @@ def _handle_spawn(argv: list[str]) -> None:
     domains = [d.strip() for d in args.domains.split(",") if d.strip()] if args.domains else None
 
     from agent_invoker.core import route
-    result = route(task_text, custom_registry=args.registry, log=not args.no_log, domains=domains)
+    result = route(task_text, custom_registry=args.registry, log=not args.no_log, domains=domains, complexity=args.complexity)
 
     _SPAWN_TOKEN.parent.mkdir(parents=True, exist_ok=True)
     _SPAWN_TOKEN.write_text(f"{result.spawn_count}:{int(time.time())}")
@@ -102,7 +103,7 @@ def _handle_spawn(argv: list[str]) -> None:
     }
     if result.persona:
         out["persona"] = result.persona
-    if result.routing == "orchestrate":
+    if result.routing == "crew":
         out["pattern"] = result.pattern
         out["steps"] = result.steps
     print(json.dumps(out, indent=2))

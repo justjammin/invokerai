@@ -83,7 +83,7 @@ class TestSpawn:
 
     def test_routing_field_present(self):
         out = run_spawn(["explain how the classifier works"])
-        assert out["routing"] in ("direct", "orchestrate")
+        assert out["routing"] in ("solo", "crew")
 
     def test_confidence_field_present(self):
         out = run_spawn(["add unit tests for the router"])
@@ -93,7 +93,7 @@ class TestSpawn:
         out = run_spawn(
             ["build a full stack app with database migrations, API, frontend, and deploy to AWS"]
         )
-        if out["routing"] == "orchestrate":
+        if out["routing"] == "crew":
             assert "pattern" in out
             assert isinstance(out["steps"], list)
             assert len(out["steps"]) > 0
@@ -312,7 +312,7 @@ class TestDecomposeCore:
             "build the frontend, implement the api, migrate the database, and deploy to kubernetes",
             log=False,
         )
-        if result.routing == "orchestrate":
+        if result.routing == "crew":
             assert result.pattern is not None
             assert isinstance(result.steps, list)
 

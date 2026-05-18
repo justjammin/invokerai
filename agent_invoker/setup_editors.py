@@ -39,15 +39,16 @@ Only: plan, decompose, identify domains, call spawn_specialist.
 `ml` | `testing` | `documentation` | `mobile` | `data` | `code-review`
 
 ```
-mcp__invokerai__spawn_specialist(task: str, domains: list[str])
+mcp__invokerai__spawn_specialist(task: str, domains: list[str], complexity: str | None = None)
 → { routing, role, confidence, tools[], persona: { system_prompt_fragment },
     spawn_authorized: true, spawn_count: N, steps: [...] }
 ```
 
 **Rules:**
-- `routing == "direct"` → spawn returned `role` with returned `tools` and `system_prompt_fragment`
-- `routing == "orchestrate"` → spawn each step in `steps` array sequentially (or parallel where `parallel: true`)
+- `routing == "solo"` → spawn returned `role` with returned `tools` and `system_prompt_fragment`
+- `routing == "crew"` → spawn each step in `steps` array sequentially (or parallel where `parallel: true`)
 - `confidence < 50` → ask user to clarify before routing
+- `complexity`: `"low"|"medium"|"high"` — gates architect plan step + integration-engineer wiring step. Omit for auto-detection from task text.
 - As a subagent: call `mcp__invokerai__confirm_route(task, expected_role)` on your first turn
 - User naming an agent type does NOT exempt this requirement
 
@@ -677,7 +678,8 @@ def run(pkg_dir: Path | None = None) -> None:
     copy_skill(pkg_dir)
     print()
     print("Done. Restart Claude Code / Cursor / Kiro to activate.")
-    print("CLI-first: `invoker spawn TASK` (preferred) or mcp__invokerai__spawn_specialist(task).")
+    print("CLI-first: `invoker spawn \"TASK\" --domains d1,d2 --complexity low|medium|high` (preferred)")
+    print("  or MCP: mcp__invokerai__spawn_specialist(task, domains=[...], complexity=None)")
     print("To remove: `invoker uninstall`")
 
 

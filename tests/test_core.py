@@ -21,7 +21,7 @@ class TestRegexScore:
 
     def test_debug_task_routes_direct(self):
         result = self._score("fix the null pointer crash in auth.py")
-        assert result["routing"] == "direct"
+        assert result["routing"] == "solo"
 
     def test_debug_task_high_confidence(self):
         result = self._score("fix the null pointer crash in auth.py")
@@ -32,18 +32,18 @@ class TestRegexScore:
             "build the react frontend, implement the backend api, "
             "configure postgres database, and deploy to kubernetes"
         )
-        assert result["routing"] == "orchestrate"
+        assert result["routing"] == "crew"
 
     def test_question_form_routes_direct(self):
         result = self._score("what does the auth middleware do")
-        assert result["routing"] == "direct"
+        assert result["routing"] == "solo"
 
     def test_tied_score_routes_direct_with_50(self):
         # Single sentence + 2 domains + 1 verb = direct(2) vs orchestrate(2) = tie
         # "add auth middleware to the api" — security(1) + backend(1) = 2 domains → orch+2
         # single sentence → direct+2; 1 imp verb → extra=0
         result = self._score("add auth middleware to the api")
-        assert result["routing"] == "direct"
+        assert result["routing"] == "solo"
         assert result["confidence"] == 50
 
     def test_result_has_required_keys(self):
@@ -67,7 +67,7 @@ class TestRoute:
 
     def test_routing_is_valid(self):
         r = route("debug the 500 error in payments", log=False)
-        assert r.routing in ("direct", "orchestrate")
+        assert r.routing in ("solo", "crew")
 
     def test_confidence_is_int(self):
         r = route("explain the auth flow", log=False)
@@ -79,7 +79,7 @@ class TestRoute:
 
     def test_direct_task_has_role(self):
         r = route("fix the TypeError in app.js", log=False)
-        if r.routing == "direct":
+        if r.routing == "solo":
             assert r.role is not None
 
     def test_debug_task_routes_to_debugger(self):
@@ -95,7 +95,7 @@ class TestRoute:
     def test_persona_absent_when_no_role(self):
         with patch("agent_invoker.core._suggest_role", return_value=None), \
              patch("agent_invoker.core._regex_score", return_value={
-                 "routing": "orchestrate", "suggested_role": None,
+                 "routing": "crew", "suggested_role": None,
                  "confidence": 80, "source": "regex"
              }):
             r = route("some task", log=False)
