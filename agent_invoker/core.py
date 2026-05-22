@@ -13,6 +13,11 @@ LOG_PATH = Path.home() / ".invokerai" / "routing_log.jsonl"
 _SESSION_LOG = Path.home() / ".claude" / "logs" / "invokerai-sessions.md"
 _LEDGER_PATH = Path.home() / ".invokerai" / "ledger.json"
 _LEDGER_TTL = 1800
+TRAINING_LOG_PATH = Path.home() / ".invokerai" / "training.jsonl"
+AUTO_TRAIN_THRESHOLD = 50
+
+_HANDOFF_DIR = Path.home() / ".invokerai" / "handoff"
+_PROJECT_MEMORY_PATH = Path.home() / ".invokerai" / "project_memory.json"
 
 _nli_cache: dict = {}
 
@@ -208,6 +213,8 @@ class RoutingResult:
     pattern: str | None = None
     steps: list[dict] = field(default_factory=list)
     spawn_count: int = 1
+    candidates: list[dict] = field(default_factory=list)
+    reasoning: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -290,6 +297,129 @@ def _complexity_score(task: str) -> str:
     return "low"
 
 
+def _is_valid_role(role: str) -> bool:
+    """Check role against the trusted (built-in) registry. Never use a caller-supplied registry."""
+    if not role or not isinstance(role, str):
+        return False
+    try:
+        registry = load_registry()
+    except Exception:
+        return False
+    return role in registry
+
+
+def record_accepted_routing(task: str, role: str, routing: str) -> None:
+    if not _is_valid_role(role):
+        return
+    try:
+        TRAINING_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with TRAINING_LOG_PATH.open("a") as f:
+            f.write(json.dumps({"ts": int(time.time()), "task": task, "role": role, "routing": routing}) + "\n")
+        count = sum(1 for _ in TRAINING_LOG_PATH.open())
+        if count >= AUTO_TRAIN_THRESHOLD and count % AUTO_TRAIN_THRESHOLD == 0:
+            _auto_train(count)
+    except OSError:
+        pass
+
+
+def _auto_train(count: int) -> None:
+    import sys
+    try:
+        examples = []
+        for ln in TRAINING_LOG_PATH.read_text().splitlines():
+            try:
+                e = json.loads(ln)
+                examples.append((e["task"], f"{e['routing']}|{e['role']}"))
+            except Exception:
+                continue
+        if len(examples) < 10:
+            return
+        classifier.build(examples, phase=1)
+        print(
+            f"\n[invokerai] Auto-trained classifier on {count} confirmed routings.\n"
+            f"  Run 'invoker train --phase 2' for higher accuracy after 200+ examples.\n",
+            file=sys.stderr,
+        )
+    except Exception:
+        pass
+
+
+def _sanitize_session_id(session_id: str) -> str:
+    """Strip anything outside [a-zA-Z0-9_-]. Raise ValueError if result empty."""
+    cleaned = re.sub(r'[^a-zA-Z0-9_\-]', '', session_id or "")
+    if not cleaned:
+        raise ValueError("invalid session_id")
+    return cleaned
+
+
+def read_handoff(session_id: str) -> dict:
+    safe_id = _sanitize_session_id(session_id)
+    path = _HANDOFF_DIR / f"{safe_id}.json"
+    if not path.resolve().is_relative_to(_HANDOFF_DIR.resolve()):
+        raise ValueError("path traversal detected")
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return {}
+
+
+def write_handoff(
+    session_id: str,
+    role: str,
+    task: str,
+    decisions: list[str] | None = None,
+    open_questions: list[str] | None = None,
+    files_touched: list[str] | None = None,
+) -> dict:
+    safe_id = _sanitize_session_id(session_id)
+    _HANDOFF_DIR.mkdir(parents=True, exist_ok=True)
+    path = _HANDOFF_DIR / f"{safe_id}.json"
+    if not path.resolve().is_relative_to(_HANDOFF_DIR.resolve()):
+        raise ValueError("path traversal detected")
+    existing = read_handoff(safe_id)
+    step = {"role": role, "task": task, "ts": int(time.time())}
+    updated = {
+        "session_id": safe_id,
+        "last_updated": int(time.time()),
+        "steps_completed": existing.get("steps_completed", []) + [step],
+        "decisions": existing.get("decisions", []) + (decisions or []),
+        "open_questions": existing.get("open_questions", []) + (open_questions or []),
+        "files_touched": existing.get("files_touched", []) + (files_touched or []),
+    }
+    try:
+        path.write_text(json.dumps(updated, indent=2))
+    except OSError:
+        pass
+    return updated
+
+
+def get_project_memory(project_id: str) -> dict:
+    if not _PROJECT_MEMORY_PATH.exists():
+        return {}
+    try:
+        data = json.loads(_PROJECT_MEMORY_PATH.read_text())
+        return data.get(project_id, {})
+    except Exception:
+        return {}
+
+
+def update_project_memory(project_id: str, role: str, domains: list[str] | None = None) -> None:
+    try:
+        data: dict = json.loads(_PROJECT_MEMORY_PATH.read_text()) if _PROJECT_MEMORY_PATH.exists() else {}
+        entry = data.get(project_id, {"role_counts": {}, "last_domains": [], "last_updated": 0})
+        entry["role_counts"][role] = entry["role_counts"].get(role, 0) + 1
+        if domains:
+            entry["last_domains"] = domains
+        entry["last_updated"] = int(time.time())
+        data[project_id] = entry
+        _PROJECT_MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _PROJECT_MEMORY_PATH.write_text(json.dumps(data))
+    except OSError:
+        pass
+
+
 def route(
     task: str,
     custom_registry: str | None = None,
@@ -315,6 +445,8 @@ def route(
         routing = "crew"
         pattern = decomp.pattern
         steps = decomp.steps
+        candidates = []
+        reasoning = [f"explicit domains {domains} → {role}"]
     else:
         interim = _regex_score(task, registry)
         ml_determined_routing = False
@@ -333,6 +465,21 @@ def route(
             role = matches[0]["role"]
         else:
             role = interim.get("suggested_role")
+
+        candidates = [{"role": m["role"]} for m in matches[1:3]]
+
+        reasoning: list[str] = []
+        if matches:
+            m = matches[0]
+            reasoning.append(f"trigger '{m['trigger']}' matched → {m['role']} ({m['category']})")
+            if len(matches) > 1:
+                runner_up_strs = [f"{x['role']} (trigger: '{x['trigger']}')" for x in matches[1:3]]
+                reasoning.append(f"runner-ups: {', '.join(runner_up_strs)}")
+        elif source == "ml-phase1" or source == "ml-phase2":
+            reasoning.append(f"ML classifier ({source}) → {role} at {confidence}%")
+        else:
+            reasoning.append(f"regex fallback → {role}")
+        reasoning.append(f"confidence: {confidence}% source: {source}")
 
         decomp = _decompose_internal(task, registry, complexity=complexity)
         pattern = decomp.pattern
@@ -361,6 +508,8 @@ def route(
         pattern=pattern,
         steps=steps,
         spawn_count=len(steps),
+        candidates=candidates,
+        reasoning=reasoning,
     )
 
     if log:
@@ -369,6 +518,19 @@ def route(
         update_session(session_id, routing_result.role, routing_result.routing)
 
     return routing_result
+
+
+def explain(task: str, custom_registry: str | None = None) -> dict:
+    result = route(task, custom_registry=custom_registry, log=False)
+    return {
+        "role": result.role,
+        "confidence": result.confidence,
+        "source": result.source,
+        "routing": result.routing,
+        "reasoning": result.reasoning,
+        "candidates": result.candidates,
+        "pattern": result.pattern,
+    }
 
 
 def _regex_score(task: str, registry: dict[str, Agent]) -> dict:
@@ -632,6 +794,22 @@ def _generate_steps_v2(domains: list[str], task: str, complexity: str = "medium"
 
     # Step 2+: EXECUTE (exclude architecture/code-review/devops — handled separately)
     execute_domains = [d for d in domains if d not in ("architecture", "code-review", "devops")]
+
+    # CONTRACT NEGOTIATION: inject api-designer before execute when backend meets
+    # frontend/mobile and no architecture step already covers interface design.
+    needs_contract = (
+        "backend" in execute_domains
+        and any(d in execute_domains for d in ("frontend", "mobile"))
+        and "architecture" not in domains
+    )
+    if needs_contract:
+        steps.append({
+            "step": step_num,
+            "role": "api-designer",
+            "action": "Define API contract: endpoints, request/response shapes, auth scheme",
+            "parallel": False,
+        })
+        step_num += 1
 
     # ML ordering: data before ml
     ordered: list[str] = []

@@ -60,10 +60,11 @@ mcp__invokerai__spawn_specialist(
     domains=["backend", "security", "testing"]
 )
 → {
-    "routing": "orchestrate",
+    "routing": "crew",
     "pattern": "pipeline",
     "spawn_count": 4,
     "spawn_authorized": true,
+    "reasoning": ["backend task detected", "security critical", "tests required"],
     "steps": [
       {"step": 1, "role": "architect-reviewer", "action": "Create implementation plan"},
       {"step": 2, "role": "backend-developer", "action": "Implement API layer"},
@@ -76,7 +77,7 @@ mcp__invokerai__spawn_specialist(
 
 ## MAS step structure
 
-Every orchestrate result follows: **PLAN → EXECUTE → REVIEW → DEPLOY PLAN** (deploy only if devops domain).
+Every crew result follows: **PLAN → EXECUTE → REVIEW → DEPLOY PLAN** (deploy only if devops domain).
 
 | Step | Role | Condition |
 |------|------|-----------|
@@ -87,12 +88,13 @@ Every orchestrate result follows: **PLAN → EXECUTE → REVIEW → DEPLOY PLAN*
 
 ## Routing rules
 
-Every result returns `routing == "orchestrate"` with a `steps` array — always spawn from steps.
-
 | Result | Action |
 |--------|--------|
-| `routing == "orchestrate"` | Spawn each step in `steps` array; parallel where `parallel: true` |
-| `confidence < 50` | Ask user to clarify before routing |
+| `routing == "crew"` | Spawn each step in `steps` array; parallel where `parallel: true` |
+| `routing == "solo"` | Single specialist, no orchestration needed |
+| `spawn_authorized == false` | Do NOT spawn: either `clarification_needed: true` (ask user) or `dry_run: true` (preview mode) |
+| `confidence < 50` | `clarification_needed: true` — show `candidates[]` to user |
+| `50 ≤ confidence < 70` | `confidence_warning` returned alongside `runner_up` option |
 
 ## Planner role
 
@@ -109,6 +111,16 @@ do NOT call mcp__invokerai__spawn_specialist. Skills manage their own agent spaw
 ```bash
 # Router status
 invoker --model-info
+
+# Explain routing decision
+invoker why "task text"
+invoker why "task text" --json
+
+# Preview routing without committing
+invoker spawn "task" --dry-run
+
+# Track role usage per project
+invoker spawn "task" --project-id myrepo
 
 # Bulk add tools to all agents
 invoker tools add --all mcp__lean-ctx__ctx_read mcp__lean-ctx__ctx_shell
@@ -148,4 +160,14 @@ Phase 2 requires: `pip install agent-invoker[embeddings]`
 
 ```bash
 invoker --registry ./my-agents.json "task text"
+```
+
+## Handoff & Memory
+
+Agents in a crew can share context between steps using handoff artifacts and cross-session project memory.
+
+```
+get_handoff(session_id)         Read prior agent context for this session
+put_handoff(session_id, ...)    Write context after completing a crew step  
+get_project_context(project_id) Retrieve cross-session project role history
 ```

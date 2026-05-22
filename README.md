@@ -81,6 +81,8 @@ For "refactor the payment gateway to async/await", InvokerAI returns the special
 
 When Claude calls `mcp__invokerai__spawn_specialist(task, domains=[...])`, it isn't getting a label back. It's getting a fully constructed specialist identity.
 
+Confidence-aware dispatch gates on confidence score: ≥ 70 spawns clean, 50–69 returns a warning with runner-ups, < 50 returns candidates without spawning (ask the user to clarify).
+
 Here's what fires under the hood:
 
 ```
@@ -109,7 +111,7 @@ spawn_specialist("build a FastAPI endpoint with Pydantic validation", domains=["
    {
      role: "backend-developer",
      confidence: 87,
-     routing: "direct",
+     routing: "solo",
      tools: ["Read", "Write", "Edit", "Bash", ...],
      persona: {
        resource_uri: "agent://backend-developer",
@@ -240,6 +242,10 @@ invoker "task text"                          Route only (no token)
 invoker --registry PATH "task text"          Use custom agent registry
 invoker --no-log "task text"                 Skip logging
 invoker decompose "task"                     MAS pattern + skeleton steps
+invoker why "task text"                      Explain why a role was picked (trigger, confidence, runner-ups)
+invoker why "task text" --json               Same, machine-readable JSON
+invoker spawn "task" --dry-run               Preview role + persona + steps without committing
+invoker spawn "task" --project-id myrepo     Track role usage per project
 ```
 
 Primary surface for Agent/MCP: `mcp__invokerai__spawn_specialist(task, domains=[...])`
@@ -274,7 +280,7 @@ Downloads once to `~/.cache/huggingface/`, runs fully local after that. No API c
 
 ## Custom agents
 
-64 agents in the default registry. Add your own — custom agents override defaults on `id` collision:
+84+ agents in the default registry. Add your own — custom agents override defaults on `id` collision:
 
 ```bash
 invoker --registry ./my-agents.json "task text"

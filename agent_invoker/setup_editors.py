@@ -141,7 +141,7 @@ if [ -n "$TASK" ] && [ -x "$VENV_PY" ]; then
     ROUTE_JSON=$("$VENV_PY" -m agent_invoker.cli --no-log "$TASK" 2>/dev/null)
     ROLE=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('role','unknown'))" 2>/dev/null)
     CONF=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('confidence',0))" 2>/dev/null)
-    printf '{"hookSpecificOutput":{"additionalContext":"InvokerAI pre-resolved: role=%s confidence=%s%%. Call mcp__invokerai__spawn_specialist(task, domains=[...]) — writes spawn token + returns execution bundle.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist first."}}\n' "$ROLE" "$CONF"
+    "$VENV_PY" -c "import json,sys; r,c=sys.argv[1],sys.argv[2]; print(json.dumps({'hookSpecificOutput':{'additionalContext':f'InvokerAI pre-resolved: role={r} confidence={c}%. Call mcp__invokerai__spawn_specialist(task, domains=[...]) — writes spawn token + returns execution bundle.','permissionDecision':'deny','permissionDecisionReason':'Call mcp__invokerai__spawn_specialist first.'}}))" "$ROLE" "$CONF"
 else
     echo '{"hookSpecificOutput":{"additionalContext":"InvokerAI: call mcp__invokerai__spawn_specialist(task, domains=[...]) — routes, writes spawn token, returns execution bundle.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist first."}}'
 fi

@@ -17,6 +17,7 @@ Start:
 """
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import Annotated
@@ -24,8 +25,28 @@ from typing import Annotated
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image  # noqa: F401 — keep for future use
 
+MAX_TASK_LEN = 4096
+
 _SPAWN_TOKEN = Path.home() / ".invokerai" / "spawn_token"
 _AGENTS_DIR = Path.home() / ".claude" / "agents"
+_logger = logging.getLogger("invokerai")
+
+_ALLOWED_REGISTRY_ROOTS = [
+    Path.home() / ".invokerai",
+    Path.cwd(),
+]
+
+
+def _validate_registry_path(p: str | None) -> None:
+    """Reject custom_registry paths outside allowed roots (zero-trust MCP)."""
+    if p is None:
+        return
+    try:
+        resolved = Path(p).resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("custom_registry path could not be resolved") from exc
+    if not any(resolved.is_relative_to(root.resolve()) for root in _ALLOWED_REGISTRY_ROOTS):
+        raise ValueError("custom_registry path not in allowed roots")
 
 _BANNER = r"""
 ╔══════════════════════════════════════════════════════════════╗
@@ -46,7 +67,7 @@ _BANNER = r"""
 
 mcp = FastMCP("invokerai", version="0.2.0", instructions=_BANNER.strip())
 
-from agent_invoker.core import append_session_log, get_session, update_session, patch_session_log_outcome
+from agent_invoker.core import append_session_log, get_session, update_session, patch_session_log_outcome, record_accepted_routing, read_handoff, write_handoff, get_project_memory, update_project_memory, _is_valid_role
 
 
 def _write_spawn_token(count: int) -> None:
@@ -77,7 +98,10 @@ def _read_agent_file(role: str) -> str:
         "Pass domains[] from your analysis to get accurate MAS step generation. "
         "Canonical domains: architecture|backend|frontend|database|devops|security|"
         "ml|testing|documentation|mobile|data|code-review. "
-        "Returns role, persona, tools, spawn_authorized, and steps for orchestrate routing."
+        "Returns role, persona, tools, spawn_authorized, and steps for orchestrate routing. "
+        "If response contains `confidence_warning`, surface it to the user before proceeding. "
+        "If response contains `clarification_needed: true`, do NOT spawn — show `candidates` to user and ask them to confirm the correct role, then call again with corrected domains. "
+        "Pass dry_run=true to preview the routing decision (role, persona, steps) without committing the spawn."
     )
 )
 def spawn_specialist(
@@ -86,15 +110,27 @@ def spawn_specialist(
     custom_registry: str | None = None,
     session_id: str | None = None,
     complexity: str | None = None,
+    dry_run: Annotated[bool, "Preview routing without writing spawn token or updating session"] = False,
+    project_id: Annotated[str | None, "Project identifier for cross-session memory (e.g. repo name)"] = None,
 ) -> dict:
     if not task or not task.strip():
         raise ValueError("task is required")
+    task = task[:MAX_TASK_LEN]
+    _validate_registry_path(custom_registry)
     start = time.time()
     from agent_invoker.core import route
     sid = session_id or "default"
-    result = route(task, custom_registry=custom_registry, log=True, domains=domains, complexity=complexity)
-    update_session(sid, result.role, result.routing)
-    _write_spawn_token(result.spawn_count)
+    result = route(task, custom_registry=custom_registry, log=not dry_run, domains=domains, complexity=complexity)
+
+    HIGH_CONF = 70
+    MED_CONF = 50
+
+    if result.confidence >= MED_CONF and not dry_run:
+        _write_spawn_token(result.spawn_count)
+
+    if not dry_run:
+        update_session(sid, result.role, result.routing)
+
     out = {
         "routing": result.routing,
         "role": result.role,
@@ -102,15 +138,44 @@ def spawn_specialist(
         "tools": result.tools,
         "source": result.source,
         "session_id": sid,
-        "spawn_authorized": True,
+        "spawn_authorized": result.confidence >= MED_CONF and not dry_run,
         "spawn_count": result.spawn_count,
     }
     if result.persona:
         out["persona"] = result.persona
     out["pattern"] = result.pattern
     out["steps"] = result.steps
-    elapsed = time.time() - start
-    append_session_log(task, result.role, result.confidence, result.routing, domains, f"{elapsed:.1f}s")
+    if result.reasoning:
+        out["reasoning"] = result.reasoning
+    prior = read_handoff(sid)
+    if prior:
+        out["prior_handoff"] = prior
+
+    if MED_CONF <= result.confidence < HIGH_CONF:
+        out["confidence_warning"] = (
+            f"Routed to {result.role} at {result.confidence}% confidence. "
+            "If wrong, call spawn_specialist again with corrected domains."
+        )
+        if result.candidates:
+            out["runner_up"] = result.candidates[0]
+    elif result.confidence < MED_CONF:
+        out["clarification_needed"] = True
+        out["candidates"] = result.candidates
+
+    if dry_run:
+        out["dry_run"] = True
+    else:
+        elapsed = time.time() - start
+        append_session_log(task, result.role, result.confidence, result.routing, domains, f"{elapsed:.1f}s")
+        if project_id and result.role:
+            update_project_memory(project_id, result.role, domains)
+            mem = get_project_memory(project_id)
+            if mem:
+                out["project_context"] = {
+                    "project_id": project_id,
+                    "frequent_roles": sorted(mem.get("role_counts", {}).items(), key=lambda x: -x[1])[:3],
+                    "last_domains": mem.get("last_domains", []),
+                }
     return out
 
 
@@ -129,6 +194,8 @@ def route_task(
 ) -> dict:
     if not task or not task.strip():
         raise ValueError("task is required")
+    task = task[:MAX_TASK_LEN]
+    _validate_registry_path(custom_registry)
     from agent_invoker.core import route
     sid = session_id or "default"
     result = route(task, custom_registry=custom_registry, log=True, domains=domains)
@@ -145,6 +212,8 @@ def route_task(
         out["persona"] = result.persona
     out["pattern"] = result.pattern
     out["steps"] = result.steps
+    if result.reasoning:
+        out["reasoning"] = result.reasoning
     return out
 
 
@@ -163,6 +232,7 @@ def confirm_route(
         raise ValueError("task is required")
     if not expected_role or not expected_role.strip():
         raise ValueError("expected_role is required")
+    task = task[:MAX_TASK_LEN]
     from agent_invoker.core import route
     sid = session_id or "default"
     result = route(task, log=False)
@@ -176,6 +246,11 @@ def confirm_route(
     }
     if not ok and result.persona:
         out["corrected_persona"] = result.persona
+    if ok and result.role == expected_role:
+        session = get_session(sid)
+        prior = session.get("prior_routes", [])
+        routing = prior[-1]["routing"] if prior else "solo"
+        record_accepted_routing(task, expected_role, routing)
     return out
 
 
@@ -190,6 +265,8 @@ def decompose_task(
     domains: list[str] | None = None,
     custom_registry: str | None = None,
 ) -> dict:
+    task = (task or "")[:MAX_TASK_LEN]
+    _validate_registry_path(custom_registry)
     from agent_invoker.core import decompose
     result = decompose(task, custom_registry=custom_registry, domains=domains)
     return {
@@ -222,7 +299,10 @@ def list_agents(category: str | None = None) -> dict:
     description=(
         "Append outcome metrics (correction cycles + first-pass acceptance) to an "
         "existing session log entry in ~/.claude/logs/invokerai-sessions.md. "
-        "Match by date + task prefix. Returns {ok: bool, error?: str}."
+        "Match by date + task prefix. "
+        "When accepted=True and corrections=0, pass task/role/routing to feed the routing feedback loop — "
+        "confirmed routings auto-train the classifier at every 50 examples. "
+        "Returns {ok: bool, error?: str}."
     )
 )
 def log_outcome(
@@ -230,8 +310,65 @@ def log_outcome(
     task_prefix: str,
     corrections: int,
     accepted: bool,
+    task: Annotated[str | None, "Full task text for feedback loop"] = None,
+    role: Annotated[str | None, "Role that was used for feedback loop"] = None,
+    routing: Annotated[str | None, "Routing type (solo/crew) for feedback loop"] = None,
 ) -> dict:
-    return patch_session_log_outcome(date, task_prefix, corrections, accepted)
+    result = patch_session_log_outcome(date, task_prefix, corrections, accepted)
+    if accepted and corrections == 0 and task and role and routing:
+        if not _is_valid_role(role):
+            _logger.warning("log_outcome: rejected unknown role (training-poisoning guard)")
+            return result
+        record_accepted_routing(task, role, routing)
+    return result
+
+
+@mcp.tool(
+    description=(
+        "Read the handoff artifact for a session — context left by previous agents "
+        "(steps completed, decisions made, open questions, files touched). "
+        "Call at the start of a crew step to pick up where the last agent left off."
+    )
+)
+def get_handoff(session_id: str) -> dict:
+    return read_handoff(session_id) or {"session_id": session_id, "steps_completed": [], "decisions": [], "open_questions": [], "files_touched": []}
+
+
+@mcp.tool(
+    description=(
+        "Write to the handoff artifact after completing a crew step. "
+        "Pass decisions made, open questions for the next agent, and files touched. "
+        "Next agent in the crew will receive this context automatically via spawn_specialist."
+    )
+)
+def put_handoff(
+    session_id: str,
+    role: str,
+    task: str,
+    decisions: list[str] | None = None,
+    open_questions: list[str] | None = None,
+    files_touched: list[str] | None = None,
+) -> dict:
+    return write_handoff(session_id, role, task, decisions, open_questions, files_touched)
+
+
+@mcp.tool(
+    description=(
+        "Retrieve cross-session project memory — which specialists have been used most "
+        "in this project, and what domains were last active. "
+        "Useful for giving agents project-specific context before they start."
+    )
+)
+def get_project_context(project_id: str) -> dict:
+    mem = get_project_memory(project_id)
+    if not mem:
+        return {"project_id": project_id, "frequent_roles": [], "last_domains": []}
+    return {
+        "project_id": project_id,
+        "frequent_roles": sorted(mem.get("role_counts", {}).items(), key=lambda x: -x[1])[:5],
+        "last_domains": mem.get("last_domains", []),
+        "last_updated": mem.get("last_updated"),
+    }
 
 
 # ── resources ─────────────────────────────────────────────────────────────────

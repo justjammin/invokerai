@@ -8,6 +8,18 @@ Format: [Semantic Versioning](https://semver.org). Types: Added, Changed, Fixed,
 
 ## [Unreleased]
 
+### Added
+- Confidence-aware dispatch: `spawn_authorized` now gates on confidence ≥ 50. Low confidence (< 50) returns `clarification_needed: true` + `candidates[]`. Medium (50–69) returns `confidence_warning` + optional `runner_up`.
+- `reasoning[]` field on `spawn_specialist` and `route_task` responses — explains which trigger fired, runner-ups, confidence source
+- Routing feedback loop: `confirm_route` (when confirmed) and `log_outcome` (accepted=True, corrections=0) write to `~/.invokerai/training.jsonl`. Auto-retrains Phase 1 classifier at every 50 confirmed examples.
+- Handoff artifact: `get_handoff` / `put_handoff` MCP tools + `prior_handoff` field in spawn response. Agents write structured context (decisions, files, open questions) between crew steps.
+- Cross-session project memory: `get_project_context` MCP tool + `--project-id` CLI flag. Tracks role frequency per project. Observability only — does not influence routing.
+- `dry_run` param on `spawn_specialist` and `--dry-run` flag on `invoker spawn` — preview routing without side effects.
+- `invoker why "task"` CLI command — explains routing decision (matched trigger, runner-ups, confidence). `--json` for machine-readable output.
+- Contract negotiation: when `backend` + `frontend`/`mobile` span a crew (without `architecture`), an `api-designer` step is auto-injected before execute phase to define API contract.
+- `candidates[]` field on `RoutingResult` — top 2 runner-up roles from inference path.
+- `log_outcome` MCP tool now accepts optional `task`, `role`, `routing` params for feedback loop.
+
 ## [0.2.0] — 2026-04-30
 
 ### Added

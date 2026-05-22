@@ -119,6 +119,26 @@ class TestSpawn:
         ts2 = int(_SPAWN_TOKEN.read_text().split(":", 1)[1])
         assert ts2 >= ts1
 
+    def test_dry_run_no_token_written(self, tmp_path, monkeypatch):
+        import agent_invoker.cli as cli_mod
+        monkeypatch.setattr(cli_mod, "_SPAWN_TOKEN", tmp_path / "spawn_token")
+        run_spawn(["add a fastapi endpoint", "--dry-run"])
+        assert not (tmp_path / "spawn_token").exists()
+
+    def test_dry_run_response_shape(self, tmp_path, monkeypatch):
+        import agent_invoker.cli as cli_mod
+        monkeypatch.setattr(cli_mod, "_SPAWN_TOKEN", tmp_path / "spawn_token")
+        out = run_spawn(["add a fastapi endpoint", "--dry-run"])
+        assert out["dry_run"] is True
+        assert out["spawn_authorized"] is False
+        assert "role" in out
+
+    def test_dry_run_includes_persona(self, tmp_path, monkeypatch):
+        import agent_invoker.cli as cli_mod
+        monkeypatch.setattr(cli_mod, "_SPAWN_TOKEN", tmp_path / "spawn_token")
+        out = run_spawn(["add a fastapi endpoint", "--dry-run"])
+        assert "persona" in out
+
 
 # ---------------------------------------------------------------------------
 # confirm
@@ -441,3 +461,24 @@ class TestLogOutcomeCli:
         out = run_log_outcome(["2026-05-13", "Fix auth bug", "1", "false"])
         assert out == {"ok": True}
         assert "**First-pass accepted:** no" in log.read_text()
+
+
+# ---------------------------------------------------------------------------
+# invoker why
+# ---------------------------------------------------------------------------
+
+class TestHandleWhy:
+    def test_handle_why_human_readable(self, capsys):
+        from agent_invoker.cli import _handle_why
+        _handle_why(["fix the fastapi auth endpoint"])
+        captured = capsys.readouterr()
+        assert "Role:" in captured.out
+        assert "Confidence:" in captured.out
+
+    def test_handle_why_json(self, capsys):
+        from agent_invoker.cli import _handle_why
+        _handle_why(["fix the fastapi auth endpoint", "--json"])
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert "role" in data
+        assert "reasoning" in data

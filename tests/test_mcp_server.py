@@ -18,6 +18,7 @@ from agent_invoker.mcp_server import (
     confirm_route,
     list_agents,
     decompose_task,
+    get_project_context,
     _agent_resources,
     _read_agent_resource,
     _SPAWN_TOKEN,
@@ -61,7 +62,7 @@ class TestServerInfo:
                 tools = await client.list_tools()
                 return {t.name for t in tools}
         names = _run(_t())
-        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome"}
+        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome", "get_handoff", "put_handoff", "get_project_context"}
 
     def test_resources_list(self):
         resources = _agent_resources()
@@ -172,6 +173,24 @@ class TestSpawnSpecialist:
         assert "pattern" in result
         assert isinstance(result["steps"], list)
         assert len(result["steps"]) >= 1
+
+    def test_dry_run_returns_preview_shape(self):
+        result = spawn_specialist(task="add a fastapi endpoint", dry_run=True)
+        assert result["dry_run"] is True
+        assert result["spawn_authorized"] is False
+        assert "role" in result
+        assert "steps" in result
+
+    def test_dry_run_does_not_write_spawn_token(self):
+        token_mtime_before = _SPAWN_TOKEN.stat().st_mtime if _SPAWN_TOKEN.exists() else None
+        spawn_specialist(task="add a fastapi endpoint", dry_run=True)
+        token_mtime_after = _SPAWN_TOKEN.stat().st_mtime if _SPAWN_TOKEN.exists() else None
+        assert token_mtime_before == token_mtime_after
+
+    def test_dry_run_false_still_writes_token(self):
+        _SPAWN_TOKEN.unlink(missing_ok=True)
+        spawn_specialist(task="fix the null pointer crash in auth.py", dry_run=False)
+        assert _SPAWN_TOKEN.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -397,3 +416,13 @@ class TestSessionLedger:
             update_session("sess-cap", f"role-{i}", "solo")
         s = get_session("sess-cap")
         assert len(s["prior_routes"]) <= 20
+
+
+# ---------------------------------------------------------------------------
+# 9. project memory
+# ---------------------------------------------------------------------------
+
+def test_get_project_context_empty():
+    result = get_project_context("nonexistent-project-xyz")
+    assert result["project_id"] == "nonexistent-project-xyz"
+    assert result["frequent_roles"] == []

@@ -1,12 +1,13 @@
 """Tests for agent_invoker.core — routing, persona loading, tied scores."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from agent_invoker.core import route, _regex_score, _suggest_role, _load_persona, RoutingResult
+from agent_invoker.core import route, _regex_score, _suggest_role, _load_persona, RoutingResult, record_accepted_routing
 from agent_invoker.registry.loader import load_registry
 
 
@@ -137,3 +138,123 @@ class TestLoadPersona:
         result = _load_persona("debugger")
         if "system_prompt_fragment" in result:
             assert not result["system_prompt_fragment"].startswith("---")
+
+
+# ---------------------------------------------------------------------------
+# record_accepted_routing
+# ---------------------------------------------------------------------------
+
+class TestRecordAcceptedRouting:
+    def test_record_accepted_routing(self, tmp_path):
+        training_log = tmp_path / "training.jsonl"
+        with patch("agent_invoker.core.TRAINING_LOG_PATH", training_log):
+            record_accepted_routing("fix auth bug", "backend-developer", "solo")
+        assert training_log.exists()
+        entry = json.loads(training_log.read_text().strip())
+        assert entry["task"] == "fix auth bug"
+        assert entry["role"] == "backend-developer"
+        assert entry["routing"] == "solo"
+        assert isinstance(entry["ts"], int)
+
+    def test_auto_train_not_triggered_below_threshold(self, tmp_path):
+        training_log = tmp_path / "training.jsonl"
+        with patch("agent_invoker.core.TRAINING_LOG_PATH", training_log), \
+             patch("agent_invoker.classifier.build") as mock_build:
+            for _ in range(3):
+                record_accepted_routing("fix auth bug", "backend-developer", "solo")
+            mock_build.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# explain()
+# ---------------------------------------------------------------------------
+
+class TestExplain:
+    def test_explain_returns_reasoning(self):
+        from agent_invoker.core import explain
+        result = explain("fix the fastapi auth endpoint")
+        assert "role" in result
+        assert isinstance(result["reasoning"], list)
+        assert len(result["reasoning"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# handoff
+# ---------------------------------------------------------------------------
+
+def test_write_and_read_handoff(tmp_path, monkeypatch):
+    import agent_invoker.core as core_mod
+    monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
+    core_mod.write_handoff("sess1", "backend-developer", "build api", decisions=["use REST"], files_touched=["api.py"])
+    result = core_mod.read_handoff("sess1")
+    assert result["session_id"] == "sess1"
+    assert result["decisions"] == ["use REST"]
+    assert result["files_touched"] == ["api.py"]
+    assert len(result["steps_completed"]) == 1
+    assert result["steps_completed"][0]["role"] == "backend-developer"
+
+
+def test_read_handoff_missing_returns_empty(tmp_path, monkeypatch):
+    import agent_invoker.core as core_mod
+    monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
+    assert core_mod.read_handoff("nonexistent") == {}
+
+
+# ---------------------------------------------------------------------------
+# project memory
+# ---------------------------------------------------------------------------
+
+def test_project_memory_roundtrip(tmp_path, monkeypatch):
+    import agent_invoker.core as core_mod
+    monkeypatch.setattr(core_mod, "_PROJECT_MEMORY_PATH", tmp_path / "pm.json")
+    core_mod.update_project_memory("myrepo", "backend-developer", ["backend"])
+    core_mod.update_project_memory("myrepo", "backend-developer", ["backend"])
+    core_mod.update_project_memory("myrepo", "test-automator", ["testing"])
+    mem = core_mod.get_project_memory("myrepo")
+    assert mem["role_counts"]["backend-developer"] == 2
+    assert mem["role_counts"]["test-automator"] == 1
+    assert mem["last_domains"] == ["testing"]
+
+
+def test_get_project_memory_missing(tmp_path, monkeypatch):
+    import agent_invoker.core as core_mod
+    monkeypatch.setattr(core_mod, "_PROJECT_MEMORY_PATH", tmp_path / "pm.json")
+    assert core_mod.get_project_memory("nonexistent") == {}
+
+
+# ---------------------------------------------------------------------------
+# contract negotiation — api-designer injection
+# ---------------------------------------------------------------------------
+
+def test_contract_step_injected_for_backend_frontend():
+    from agent_invoker.core import decompose
+    result = decompose("build a user dashboard", domains=["backend", "frontend"])
+    roles = [s["role"] for s in result.steps]
+    assert "api-designer" in roles
+    api_idx = roles.index("api-designer")
+    backend_roles = {"backend-developer", "fullstack-developer", "fastapi-developer"}
+    frontend_roles = {"frontend-developer", "react-specialist"}
+    for i, s in enumerate(result.steps):
+        if s["role"] in backend_roles or s["role"] in frontend_roles:
+            assert i > api_idx, f"{s['role']} should come after api-designer"
+
+
+def test_contract_step_not_injected_when_architecture_present():
+    from agent_invoker.core import decompose
+    result = decompose("build a user dashboard", domains=["architecture", "backend", "frontend"])
+    roles = [s["role"] for s in result.steps]
+    assert "api-designer" not in roles
+
+
+def test_contract_step_not_injected_backend_only():
+    from agent_invoker.core import decompose
+    result = decompose("build auth api", domains=["backend"])
+    roles = [s["role"] for s in result.steps]
+    assert "api-designer" not in roles
+
+
+def test_contract_step_injected_for_backend_mobile():
+    from agent_invoker.core import decompose
+    result = decompose("build mobile app with api", domains=["backend", "mobile"])
+    roles = [s["role"] for s in result.steps]
+    assert "api-designer" in roles

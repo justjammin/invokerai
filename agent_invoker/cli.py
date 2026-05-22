@@ -7,12 +7,13 @@ import time
 from pathlib import Path
 
 _SPAWN_TOKEN = Path.home() / ".invokerai" / "spawn_token"
+MAX_TASK_LEN = 4096
 
 
 def main() -> None:
     # Peek at argv to decide: subcommand dispatch or bare task routing
     argv = sys.argv[1:]
-    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall", "decompose", "stop", "update", "agents", "log-outcome"}
+    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall", "decompose", "stop", "update", "agents", "log-outcome", "why"}
 
     if argv and argv[0] in known_commands:
         _dispatch_subcommand(argv)
@@ -47,6 +48,7 @@ def _dispatch_route(argv: list[str]) -> None:
             _print_help()
             sys.exit(1)
 
+    task_text = task_text[:MAX_TASK_LEN]
     from agent_invoker.core import route
     result = route(task_text, custom_registry=args.registry, log=not args.no_log)
     print(json.dumps({
@@ -69,7 +71,12 @@ def _handle_spawn(argv: list[str]) -> None:
     parser.add_argument("--domains", metavar="DOMAINS", help="Comma-separated domains, e.g. backend,testing")
     parser.add_argument("--session-id", metavar="ID", dest="session_id", default=None)
     parser.add_argument("--complexity", metavar="LEVEL", choices=["low", "medium", "high"], default=None)
+    parser.add_argument("--dry-run", action="store_true", dest="dry_run")
+    parser.add_argument("--project-id", metavar="ID", dest="project_id", default=None)
     args = parser.parse_args(argv)
+
+    import os
+    project_id = args.project_id or os.path.basename(os.getcwd())
 
     task_text = args.task
     if not task_text:
@@ -79,18 +86,36 @@ def _handle_spawn(argv: list[str]) -> None:
         print(json.dumps({"error": "task is required"}))
         sys.exit(1)
 
+    task_text = task_text[:MAX_TASK_LEN]
+
     domains = [d.strip() for d in args.domains.split(",") if d.strip()] if args.domains else None
 
     from agent_invoker.core import route
-    result = route(task_text, custom_registry=args.registry, log=not args.no_log, domains=domains, complexity=args.complexity)
-
-    _SPAWN_TOKEN.parent.mkdir(parents=True, exist_ok=True)
-    _SPAWN_TOKEN.write_text(f"{result.spawn_count}:{int(time.time())}")
+    result = route(task_text, custom_registry=args.registry, log=not args.no_log and not args.dry_run, domains=domains, complexity=args.complexity)
 
     sid = args.session_id or "default"
-    from agent_invoker.core import append_session_log, update_session
-    update_session(sid, result.role, result.routing)
-    append_session_log(task_text, result.role, result.confidence, result.routing, domains)
+    out_project_context = None
+
+    if not args.dry_run:
+        _SPAWN_TOKEN.parent.mkdir(parents=True, exist_ok=True)
+        _SPAWN_TOKEN.write_text(f"{result.spawn_count}:{int(time.time())}")
+
+        from agent_invoker.core import append_session_log, update_session, update_project_memory, get_project_memory
+        update_session(sid, result.role, result.routing)
+        append_session_log(task_text, result.role, result.confidence, result.routing, domains)
+        if result.role:
+            update_project_memory(project_id, result.role, domains)
+            mem = get_project_memory(project_id)
+            if mem:
+                out_project_context = {
+                    "project_id": project_id,
+                    "frequent_roles": sorted(mem.get("role_counts", {}).items(), key=lambda x: -x[1])[:3],
+                    "last_domains": mem.get("last_domains", []),
+                }
+            else:
+                out_project_context = None
+        else:
+            out_project_context = None
 
     out: dict = {
         "routing": result.routing,
@@ -98,7 +123,7 @@ def _handle_spawn(argv: list[str]) -> None:
         "confidence": result.confidence,
         "tools": result.tools,
         "source": result.source,
-        "spawn_authorized": True,
+        "spawn_authorized": not args.dry_run,
         "session_id": sid,
     }
     if result.persona:
@@ -106,6 +131,11 @@ def _handle_spawn(argv: list[str]) -> None:
     if result.routing == "crew":
         out["pattern"] = result.pattern
         out["steps"] = result.steps
+    if args.dry_run:
+        out["dry_run"] = True
+        out["spawn_authorized"] = False
+    if not args.dry_run and out_project_context:
+        out["project_context"] = out_project_context
     print(json.dumps(out, indent=2))
 
 
@@ -281,6 +311,50 @@ def _handle_log_outcome(argv: list[str]) -> None:
     print(json.dumps(result))
 
 
+def _handle_why(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="invoker why", add_help=False)
+    parser.add_argument("task", nargs="?")
+    parser.add_argument("--registry", metavar="PATH")
+    parser.add_argument("--json", action="store_true", dest="as_json")
+    args = parser.parse_args(argv)
+
+    task_text = args.task
+    if not task_text:
+        if not sys.stdin.isatty():
+            task_text = sys.stdin.read().strip()
+    if not task_text:
+        print("usage: invoker why \"task text\"", file=sys.stderr)
+        sys.exit(1)
+
+    from agent_invoker.core import explain
+    result = explain(task_text, custom_registry=args.registry)
+
+    if args.as_json:
+        print(json.dumps(result, indent=2))
+        return
+
+    role = result.get("role") or "unknown"
+    conf = result.get("confidence", 0)
+    source = result.get("source", "?")
+    routing = result.get("routing", "solo")
+    reasoning = result.get("reasoning", [])
+    candidates = result.get("candidates", [])
+
+    print(f"\nRole:       {role}")
+    print(f"Confidence: {conf}%  ({source})")
+    print(f"Routing:    {routing}")
+    if reasoning:
+        print(f"\nWhy:")
+        for line in reasoning:
+            print(f"  {line}")
+    if candidates:
+        print(f"\nRunner-ups:")
+        for c in candidates:
+            print(f"  {c['role']}")
+    print(f"\nTo override: invoker spawn \"{task_text}\" --domains <domain>")
+    print()
+
+
 # ── tools subcommand ──────────────────────────────────────────────────────────
 
 def _dispatch_subcommand(argv: list[str]) -> None:
@@ -323,6 +397,8 @@ def _dispatch_subcommand(argv: list[str]) -> None:
         _handle_agents(rest)
     elif command == "log-outcome":
         _handle_log_outcome(rest)
+    elif command == "why":
+        _handle_why(rest)
 
 
 def _handle_tools(argv: list[str]) -> None:
@@ -411,6 +487,8 @@ def _print_help() -> None:
     print("""Usage:
   invoker spawn "task"                             Route + write spawn token (primary surface, ~100 tok)
   invoker spawn "task" --domains d1,d2             Route with domain hints (domains optional: --domains d1,d2)
+  invoker spawn "task" --dry-run                   Preview role + persona + steps without committing
+  invoker spawn "task" --project-id myrepo          Track role usage per project (auto-derived from cwd if omitted)
   invoker spawn "task" [--session-id ID]           Persist session ledger under named ID
   invoker confirm "task" "expected-role"           Subagent self-check — verify correct specialist
   invoker "task text"                              Route only (no token, no spawn)
@@ -421,6 +499,8 @@ def _print_help() -> None:
   invoker decompose "task"                         Detect MAS pattern + generate skeleton steps (orchestrate only)
   invoker agents                                   List all available specialist agents
   invoker agents --category backend                Filter by category
+  invoker why "task text"                          Explain why a role was picked (triggers, confidence, runner-ups)
+  invoker why "task text" --json                   Same, machine-readable JSON
   invoker log-outcome DATE PREFIX CORRECTIONS ACCEPTED  Append outcome metrics to session log
 
   invoker setup                                    Configure MCP + hooks for Claude Code, Cursor, Kiro, Copilot
