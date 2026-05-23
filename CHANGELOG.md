@@ -8,6 +8,14 @@ Format: [Semantic Versioning](https://semver.org). Types: Added, Changed, Fixed,
 
 ## [Unreleased]
 
+### Gas City Integration
+- Optional Gas City runtime for crew routing (INVOKERAI_GASCITY env var: off/auto/on)
+- `get_crew_status` MCP tool for crew progress monitoring (pending/running/done/failed per agent)
+- Handoff authority locking: session-scoped via `bd` mail or file, never merged
+- Persona files written to /tmp/invokerai-*.persona.md, swept at server startup
+- GcClient subprocess wrapper with typed error surface and 300s TTL cache
+- Default INVOKERAI_GASCITY=off — no behavior change for existing users
+
 ### Added
 - Confidence-aware dispatch: `spawn_authorized` now gates on confidence ≥ 50. Low confidence (< 50) returns `clarification_needed: true` + `candidates[]`. Medium (50–69) returns `confidence_warning` + optional `runner_up`.
 - `reasoning[]` field on `spawn_specialist` and `route_task` responses — explains which trigger fired, runner-ups, confidence source

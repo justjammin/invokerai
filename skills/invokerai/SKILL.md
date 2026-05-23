@@ -171,3 +171,15 @@ get_handoff(session_id)         Read prior agent context for this session
 put_handoff(session_id, ...)    Write context after completing a crew step  
 get_project_context(project_id) Retrieve cross-session project role history
 ```
+
+## Gas City Crew Monitoring
+
+When `INVOKERAI_GASCITY` is enabled (auto/on), crew steps run under Gas City supervision. Monitor progress with:
+
+```
+get_crew_status(crew_root_bead_id)  Get step-level status of running crew (pending/running/done/failed per agent)
+```
+
+Returns `{crew_id, crew_status, steps: [{step, role, status, started_at, completed_at}]}`.
+
+When Gas City is disabled (`INVOKERAI_GASCITY=off`), `get_crew_status` returns `{"error": "Gas City not available"}`.

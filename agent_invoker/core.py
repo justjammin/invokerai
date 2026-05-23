@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from agent_invoker.registry.loader import load_registry, Agent
 from agent_invoker import classifier
+
+_logger = logging.getLogger("invokerai.core")
 
 LOG_PATH = Path.home() / ".invokerai" / "routing_log.jsonl"
 _SESSION_LOG = Path.home() / ".claude" / "logs" / "invokerai-sessions.md"
@@ -215,6 +219,7 @@ class RoutingResult:
     spawn_count: int = 1
     candidates: list[dict] = field(default_factory=list)
     reasoning: list[str] = field(default_factory=list)
+    persona_file: str | None = None
 
 
 @dataclass
@@ -266,11 +271,15 @@ def get_session(session_id: str) -> dict:
 
 
 def update_session(session_id: str, role: str | None, routing: str) -> None:
+    from agent_invoker.gc_client import gc_client as _gc_client
     s = get_session(session_id)
     s["active_role"] = role
     s["prior_routes"].append({"role": role, "routing": routing, "ts": int(time.time())})
     if len(s["prior_routes"]) > 20:
         s["prior_routes"] = s["prior_routes"][-20:]
+    # Set handoff_backend once at session creation; never overwrite.
+    if "handoff_backend" not in s:
+        s["handoff_backend"] = "mail" if _gc_client() is not None else "file"
     try:
         data: dict = json.loads(_LEDGER_PATH.read_text()) if _LEDGER_PATH.exists() else {}
     except Exception:
@@ -352,8 +361,53 @@ def _sanitize_session_id(session_id: str) -> str:
     return cleaned
 
 
+def _get_session_handoff_backend(session_id: str) -> str:
+    """Return the handoff_backend for session_id; default 'file' for legacy sessions."""
+    try:
+        data: dict = json.loads(_LEDGER_PATH.read_text()) if _LEDGER_PATH.exists() else {}
+        return data.get(session_id, {}).get("handoff_backend", "file")
+    except Exception:
+        return "file"
+
+
 def read_handoff(session_id: str) -> dict:
     safe_id = _sanitize_session_id(session_id)
+    backend = _get_session_handoff_backend(safe_id)
+
+    if backend == "mail":
+        from agent_invoker.gc_client import gc_client as _gc_client, GcError
+        client = _gc_client()
+        if client is None:
+            return {}
+        try:
+            result = client.run([
+                "bd", "list",
+                "--assignee", safe_id,
+                "--label", "invokerai:handoff",
+                "--json",
+                "--limit", "10",
+            ])
+            # Reconstruct the expected handoff dict shape from bead list.
+            beads = result if isinstance(result, list) else result.get("items", [])
+            steps_completed = []
+            for bead in beads:
+                desc = bead.get("description", "") or ""
+                try:
+                    parsed = json.loads(desc)
+                except (json.JSONDecodeError, ValueError):
+                    parsed = {"raw": desc}
+                steps_completed.append(parsed)
+            return {
+                "session_id": safe_id,
+                "steps_completed": steps_completed,
+                "decisions": [],
+                "open_questions": [],
+                "files_touched": [],
+            }
+        except GcError:
+            return {}
+
+    # "file" backend (original logic)
     path = _HANDOFF_DIR / f"{safe_id}.json"
     if not path.resolve().is_relative_to(_HANDOFF_DIR.resolve()):
         raise ValueError("path traversal detected")
@@ -374,10 +428,7 @@ def write_handoff(
     files_touched: list[str] | None = None,
 ) -> dict:
     safe_id = _sanitize_session_id(session_id)
-    _HANDOFF_DIR.mkdir(parents=True, exist_ok=True)
-    path = _HANDOFF_DIR / f"{safe_id}.json"
-    if not path.resolve().is_relative_to(_HANDOFF_DIR.resolve()):
-        raise ValueError("path traversal detected")
+    backend = _get_session_handoff_backend(safe_id)
     existing = read_handoff(safe_id)
     step = {"role": role, "task": task, "ts": int(time.time())}
     updated = {
@@ -388,6 +439,27 @@ def write_handoff(
         "open_questions": existing.get("open_questions", []) + (open_questions or []),
         "files_touched": existing.get("files_touched", []) + (files_touched or []),
     }
+
+    if backend == "mail":
+        from agent_invoker.gc_client import gc_client as _gc_client, GcError
+        client = _gc_client()
+        if client is not None:
+            description_json = json.dumps(updated)
+            try:
+                client.run([
+                    "gc", "mail", "send",
+                    "--to", safe_id,
+                    "--json", description_json,
+                ])
+            except GcError as exc:
+                _logger.warning("write_handoff mail send failed: %s", exc)
+        return updated
+
+    # "file" backend (original logic)
+    _HANDOFF_DIR.mkdir(parents=True, exist_ok=True)
+    path = _HANDOFF_DIR / f"{safe_id}.json"
+    if not path.resolve().is_relative_to(_HANDOFF_DIR.resolve()):
+        raise ValueError("path traversal detected")
     try:
         path.write_text(json.dumps(updated, indent=2))
     except OSError:
@@ -496,6 +568,34 @@ def route(
 
     agent = registry.get(role or "")
     tools = agent.tools if agent else []
+    persona = _load_persona(role, task) if role else {}
+
+    # Write persona fragment to a temp file when gc is available (step 1 only).
+    persona_file: str | None = None
+    if role and persona and session_id:
+        from agent_invoker.gc_client import gc_client as _gc_client
+        if _gc_client() is not None:
+            safe_sid = _sanitize_session_id(session_id)
+            dest = Path(f"/tmp/invokerai-{safe_sid}-step1.persona.md")
+            try:
+                # Atomic write: write to .tmp then rename.
+                fd, tmp_path = tempfile.mkstemp(
+                    prefix=f"invokerai-{safe_sid}-step1.",
+                    suffix=".persona.md.tmp",
+                    dir="/tmp",
+                )
+                try:
+                    with open(fd, "w", encoding="utf-8") as fh:
+                        fh.write(persona.get("system_prompt_fragment", ""))
+                    Path(tmp_path).rename(dest)
+                    persona_file = str(dest)
+                except Exception:
+                    try:
+                        Path(tmp_path).unlink(missing_ok=True)
+                    except OSError:
+                        pass
+            except OSError:
+                pass
 
     routing_result = RoutingResult(
         routing=routing,
@@ -504,12 +604,13 @@ def route(
         tools=tools,
         source=source,
         agent=agent,
-        persona=_load_persona(role, task) if role else {},
+        persona=persona,
         pattern=pattern,
         steps=steps,
         spawn_count=len(steps),
         candidates=candidates,
         reasoning=reasoning,
+        persona_file=persona_file,
     )
 
     if log:

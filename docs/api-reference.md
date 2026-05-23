@@ -1,6 +1,6 @@
 # InvokerAI MCP API Reference
 
-Full reference for InvokerAI v0.3.0-dev — four core tools, plus three new handoff & memory tools. Two read-only routing classifiers, one that actually gates spawning, one for discovery, and three for cross-session context. If you only read one section, make it `spawn_specialist`.
+Full reference for InvokerAI v0.3.0-dev — four core tools, plus four handoff & monitoring tools. Two read-only routing classifiers, one that actually gates spawning, one for discovery, three for cross-session context, and one for Gas City crew monitoring. If you only read one section, make it `spawn_specialist`.
 
 ## Overview
 
@@ -779,6 +779,88 @@ Response:
 
 ---
 
+### `get_crew_status` — GAS CITY CREW MONITORING
+
+Get step-level status of a running Gas City crew. Requires `INVOKERAI_GASCITY` enabled.
+
+**Description:**  
+Poll progress of a running crew dispatched via Gas City supervisor. Returns status per agent step (pending/running/done/failed).
+
+**Annotations:**
+```json
+{
+  "readOnlyHint": true,
+  "idempotentHint": true
+}
+```
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "crew_root_bead_id": {
+      "type": "string",
+      "description": "Root bead ID from the crew (required)"
+    }
+  },
+  "required": ["crew_root_bead_id"]
+}
+```
+
+**Response:**
+```json
+{
+  "crew_id": "bead_abc123",
+  "crew_status": "running",
+  "steps": [
+    {
+      "step": 1,
+      "role": "architect-reviewer",
+      "status": "done",
+      "started_at": 1705000000,
+      "completed_at": 1705000060
+    },
+    {
+      "step": 2,
+      "role": "backend-developer",
+      "status": "running",
+      "started_at": 1705000061,
+      "completed_at": null
+    }
+  ]
+}
+```
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|---|
+| `crew_id` | string | Root bead ID of the crew |
+| `crew_status` | string | Overall crew status: pending, running, done, failed |
+| `steps` | array | Per-agent step status |
+| `steps[].step` | number | Step sequence number |
+| `steps[].role` | string | Agent role / bead title |
+| `steps[].status` | string | Step status: pending, running, done, failed |
+| `steps[].started_at` | number \| null | Unix timestamp when step started |
+| `steps[].completed_at` | number \| null | Unix timestamp when step completed |
+
+**Error response (Gas City not available):**
+```json
+{
+  "error": "Gas City not available",
+  "crew_root_bead_id": "bead_abc123"
+}
+```
+
+**When to use:**
+- Monitor multi-agent crew execution in real-time
+- Track which step is currently executing
+- Detect crew stalls or failures
+- Requires `INVOKERAI_GASCITY=auto` or `=on`
+
+---
+
 ## Resources
 
 Here's a thing I didn't want to skip — agent profiles are MCP resources, not just data attached to tool responses. That means editors can lazy-load them on demand via `resources/read` instead of bundling the full profile on every routing call.
@@ -947,6 +1029,21 @@ After spawn_specialist returns:
 3. Extract system prompt and context hints
 4. Use for detailed agent configuration
 ```
+
+---
+
+## Environment Variables
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|---|
+| `INVOKERAI_GASCITY` | `off` \| `auto` \| `on` | `off` | Gas City integration mode. `off` = disabled (standard spawn), `auto` = detect gc and warn on first use, `on` = require gc, error if missing |
+
+**Gas City environment:**
+- `INVOKERAI_GASCITY=off` — Crew routing uses manual agent spawn (original behavior)
+- `INVOKERAI_GASCITY=auto` — If `gc` binary is found, enable supervisor loop; logs one-time warning on first activation
+- `INVOKERAI_GASCITY=on` — Require `gc` binary; error immediately if missing
+
+When enabled, crew steps dispatch via `gc sling --formula` with crash recovery, `bd` mail handoff, and `/tmp/invokerai-*.persona.md` temp files (swept at server startup).
 
 ---
 

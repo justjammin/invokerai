@@ -62,7 +62,7 @@ class TestServerInfo:
                 tools = await client.list_tools()
                 return {t.name for t in tools}
         names = _run(_t())
-        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome", "get_handoff", "put_handoff", "get_project_context"}
+        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome", "get_handoff", "put_handoff", "get_project_context", "get_crew_status"}
 
     def test_resources_list(self):
         resources = _agent_resources()

@@ -4,21 +4,15 @@
 
 # InvokerAI
 
-**The problem:** Large tasks dumped into one model window bloat context. Generalist reasoning on specialized domains—like "fix the auth flow AND refactor the DB schema"—yields compressed reasoning, lower-quality output, and serial bottlenecks.
+Okay so here's the thing. You drop a big task into the chat, and your agent tries to do everything at once. Auth refactor AND database migration AND frontend changes, all in one context window, one generic brain, no separation. The output is fine. Not great. Fine.
 
-**The subagent solution:**
-- **Decomposition** — Complex tasks break into focused subtasks. Each agent operates in isolation with only the context it needs.
-- **Specialization** — A domain-tuned persona beats generic reasoning. A backend engineer sees backend patterns; a test engineer sees coverage gaps the generalist missed.
+InvokerAI fixes that. Pass a task and the relevant domains. It figures out which specialist to call, builds their identity, and hands them everything they need before they write a single line. You get a backend engineer when you need one. Not a generalist pretending.
+
+**What it's actually doing:**
+- **Decomposition** — Complex tasks break into focused subtasks. Each agent gets only the context it needs.
+- **Specialization** — A domain-tuned persona beats generic reasoning every time. A backend engineer sees backend patterns. A test engineer catches coverage gaps the generalist missed.
 - **Parallelism** — Independent subtasks run concurrently instead of sequentially.
-- **Noise reduction** — Less context window per agent = less hallucination surface, stronger reasoning.
-
-**InvokerAI's job:** Eliminate manual agent selection. Pass a task and domains. InvokerAI routes to the right specialist(s) with zero configuration.
-
-What it does:
-- **Automatic routing** — Classify task, find the right role, inject domain-specific system prompt (stacked across 3 tiers: universal rules → language patterns → specialist depth).
-- **Multi-agent orchestration** — Detect task patterns (pipeline, parallel, feedback loop, supervisor, planning-first, hierarchical) and generate execution steps with correct sequencing. No configuration required.
-- **Complexity-aware gating** — Simple tasks get direct routing. Complex tasks get planning + integration + review steps injected. No bloat on tiny changes.
-- **Persona composition** — Load role, tool allowlist, and behavioral rules from agent registry. Spawned agents get a compiled identity before they run.
+- **Noise reduction** — Less context window per agent means less hallucination surface and stronger reasoning.
 
 No cloud. No API keys. No config file editing. Runs entirely on your machine.
 
@@ -71,17 +65,15 @@ No config file to edit. No hook to write. Restart your editor. Routing is live.
 
 Nothing you have to do. That's the thing.
 
-You type your task. Your agent identifies the relevant domains, calls `mcp__invokerai__spawn_specialist`, and hands execution to the right specialist — all before any code gets written. You just get a backend engineer when you need one.
+You type your task. Your agent identifies the relevant domains, calls `mcp__invokerai__spawn_specialist`, and hands execution to the right specialist. All before any code gets written. You just get a backend engineer when you need one.
 
-For "refactor the payment gateway to async/await", InvokerAI returns the specialist with that context. There's also a gate that ensures no Agent call bypasses routing.
+For "refactor the payment gateway to async/await", InvokerAI returns the specialist with that context. The confidence-aware gate handles everything below 70: warning at 50-69, ask the user to clarify below 50.
 
 ---
 
 ## What spawn_specialist actually does
 
-When Claude calls `mcp__invokerai__spawn_specialist(task, domains=[...])`, it isn't getting a label back. It's getting a fully constructed specialist identity.
-
-Confidence-aware dispatch gates on confidence score: ≥ 70 spawns clean, 50–69 returns a warning with runner-ups, < 50 returns candidates without spawning (ask the user to clarify).
+No seriously: when Claude calls `mcp__invokerai__spawn_specialist(task, domains=[...])`, it isn't getting a label back. It's getting a fully constructed specialist identity.
 
 Here's what fires under the hood:
 
@@ -120,15 +112,53 @@ spawn_specialist("build a FastAPI endpoint with Pydantic validation", domains=["
    }
 ```
 
-The spawned agent doesn't get a name. It gets a composed behavioral contract — stacked from domain rules, subdomain patterns, and specialist depth — all assembled for this exact task. Three tiers of context collapses into one prompt fragment the agent runs as.
+The spawned agent doesn't get a name. It gets a composed behavioral contract, stacked from domain rules, subdomain patterns, and specialist depth, all assembled for this exact task. Three tiers collapse into one prompt fragment the agent runs as.
 
 The tighter the match, the deeper the stack. A FastAPI task pulls all three tiers. A generic backend task pulls one or two. Task context shapes the specialist in real time, without any manual agent selection.
 
 ---
 
+## Gas City Integration (Optional)
+
+Wait until you see what happens when you pair this with [Gas City](https://github.com/gastownhall/gascity).
+
+Here's the thing: InvokerAI decides *who* runs the work. Gas City actually runs it: supervised sessions, crash recovery, cross-agent handoff via `bd` mail instead of JSON files. Solo routing stays exactly the same. Crew routing gets a real supervisor loop.
+
+Gas City is the engine. InvokerAI is the GPS.
+
+**Prerequisites:**
+- `gc` binary installed: `brew install gastownhall/gascity/gascity`
+- Gas City >= current release
+- Initialized city: `gc init` (one-time setup)
+- Each project repo registered as a rig: `cd your-repo && gc rig add .`
+
+**Enable:**
+
+```bash
+# Auto-detect gc, log a warning on first activation
+export INVOKERAI_GASCITY=auto
+
+# Require gc — error immediately if missing
+export INVOKERAI_GASCITY=on
+
+# Default: disabled (manual spawn behavior unchanged)
+export INVOKERAI_GASCITY=off
+```
+
+**What changes with Gas City enabled:**
+
+- **Crew routing:** Multi-agent steps dispatch via `gc sling --formula` with supervisor management and crash recovery
+- **Handoff:** Inter-agent context via `bd` mail (beads-backed) instead of JSON files
+- **Persona files:** Agent instructions written to `/tmp/invokerai-*.persona.md` per-step, swept at server startup
+- **New tool:** `get_crew_status(crew_root_bead_id)` — poll progress of a running crew (pending/running/done/failed per agent)
+
+Solo routing is unchanged regardless of Gas City setting.
+
+---
+
 ## Multi-agent tasks
 
-When a task spans multiple domains, InvokerAI hands Claude a structured decomposition instead of free-text guidance. Six patterns — detected from the task text, no config required:
+When a task spans multiple domains, InvokerAI hands Claude a structured decomposition instead of free-text guidance. Six patterns, detected from the task text, no config required:
 
 | Pattern | When | Structure |
 |---|---|---|
@@ -190,11 +220,11 @@ SubagentStart hook ──── spawned agent runs:
                         Self-corrects if the classifier disagrees.
 ```
 
-`permissionDecision: deny` is a real platform block. The Agent call doesn't happen. There's no workaround — which is the whole point.
+`permissionDecision: deny` is a real platform block. The Agent call doesn't happen. There's no workaround. That's the whole point.
 
 **Kiro:** Same token pattern via `agentSpawn` + `userPromptSubmit` hooks.
 
-**Cursor / GitHub Copilot:** No hook system. Enforcement via CLAUDE.md blocking rule. InvokerAI is what agents *want* to call — it returns the execution bundle. There's nothing to skip.
+**Cursor / GitHub Copilot:** No hook system. Routing is enforced via CLAUDE.md guidance: agents that follow it call `spawn_specialist` and get routed correctly. No platform-level block exists; an agent that ignores the rule can bypass routing silently.
 
 ---
 
@@ -250,7 +280,7 @@ invoker spawn "task" --project-id myrepo     Track role usage per project
 
 Primary surface for Agent/MCP: `mcp__invokerai__spawn_specialist(task, domains=[...])`
 
-If MCP is unavailable (Cursor agent mode, Codex, or any harness where MCP args can't be passed), use the CLI equivalent from terminal — returns the same bundle and writes the spawn token:
+If MCP is unavailable (Cursor agent mode, Codex, or any harness where MCP args can't be passed), use the CLI equivalent from terminal. Returns the same bundle and writes the spawn token:
 
 ```bash
 invoker spawn "TASK" --domains d1,d2
@@ -280,7 +310,7 @@ Downloads once to `~/.cache/huggingface/`, runs fully local after that. No API c
 
 ## Custom agents
 
-84+ agents in the default registry. Add your own — custom agents override defaults on `id` collision:
+84+ agents in the default registry. Add your own: custom agents override defaults on `id` collision.
 
 ```bash
 invoker --registry ./my-agents.json "task text"
