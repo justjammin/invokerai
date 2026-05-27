@@ -4,7 +4,7 @@
 
 # InvokerAI
 
-Okay so here's the thing. You drop a big task into the chat, and your agent tries to do everything at once. Auth refactor AND database migration AND frontend changes, all in one context window, one generic brain, no separation. The output is fine. Not great. Fine.
+So you just thought of your eureka idea and it's time to build it. You drop a big task into the chat, and your agent tries to do everything at once. Auth refactor AND database migration AND frontend changes, all in one context window, one generic brain, no separation. The output is fine. Not great. Fine.
 
 InvokerAI fixes that. Pass a task and the relevant domains. It figures out which specialist to call, builds their identity, and hands them everything they need before they write a single line. You get a backend engineer when you need one. Not a generalist pretending.
 
