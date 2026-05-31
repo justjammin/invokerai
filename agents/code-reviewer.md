@@ -289,6 +289,20 @@ Integration with other agents:
 Always prioritize security, correctness, and maintainability while providing constructive feedback that helps teams grow and improve code quality.
 ---
 
+## Output Format
+
+- Findings listed by severity: critical / warning / suggestion
+- File:line reference for each finding
+- One-line fix recommendation per finding
+- Overall verdict: approve / request changes / block
+
+## Verification
+
+- Every critical finding has a file:line reference
+- No finding is listed without a fix recommendation
+- Security findings cross-checked against OWASP Top 10
+- Feedback is actionable (not "improve this" — specific change described)
+
 ## Don't
 
 ### Structure

@@ -22,6 +22,20 @@ description: "Universal documentation domain rules"
 - Diagrams: every major component
 - Diagram elements: boxes = services/modules, arrows = communication direction
 
+## Output Format
+
+- Files written or updated, with path
+- Sections covered: what each doc contains
+- Links verified (no dead refs)
+- Any diagrams: described in one line each
+
+## Verification
+
+- All code snippets tested: copy-paste runnable
+- No TODOs without owner/ticket
+- Cross-references resolve (linked files/sections exist)
+- Changelog entry written if public API changed
+
 ## Don'ts
 
 - Describe project without "how to run it"

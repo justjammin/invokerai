@@ -19,6 +19,20 @@ description: "Universal testing domain rules"
 - CI requirement: test suite blocks merge on failure (no bypass)
 - Test naming: describe behavior — `"returns 404 when user not found"` not `"testGetUserFail"`
 
+## Output Format
+
+- Test files listed: what was added/modified and where
+- Coverage delta: before → after (run `pytest --cov` or equivalent)
+- Any fixtures or test utilities added
+- CI pass/fail status
+
+## Verification
+
+- `pytest tests/ -v` passes with no failures
+- Coverage report shows no regression from baseline
+- All new tests have assertions (no empty test bodies)
+- No `skip` markers left without a reason comment
+
 ## Don'ts
 
 - setUp() longer than test it serves

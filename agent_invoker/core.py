@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
-import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,6 +21,7 @@ TRAINING_LOG_PATH = Path.home() / ".invokerai" / "training.jsonl"
 AUTO_TRAIN_THRESHOLD = 50
 
 _HANDOFF_DIR = Path.home() / ".invokerai" / "handoff"
+_PERSONA_DIR = Path.home() / ".invokerai" / "personas"
 _PROJECT_MEMORY_PATH = Path.home() / ".invokerai" / "project_memory.json"
 
 _nli_cache: dict = {}
@@ -570,30 +571,25 @@ def route(
     tools = agent.tools if agent else []
     persona = _load_persona(role, task) if role else {}
 
-    # Write persona fragment to a temp file when gc is available (step 1 only).
+    # Write persona fragment to a private per-user directory when gc is available (step 1 only).
     persona_file: str | None = None
     if role and persona and session_id:
         from agent_invoker.gc_client import gc_client as _gc_client
         if _gc_client() is not None:
             safe_sid = _sanitize_session_id(session_id)
-            dest = Path(f"/tmp/invokerai-{safe_sid}-step1.persona.md")
+            dest = _PERSONA_DIR / f"invokerai-{safe_sid}-step1.persona.md"
             try:
-                # Atomic write: write to .tmp then rename.
-                fd, tmp_path = tempfile.mkstemp(
-                    prefix=f"invokerai-{safe_sid}-step1.",
-                    suffix=".persona.md.tmp",
-                    dir="/tmp",
-                )
+                _PERSONA_DIR.mkdir(parents=True, exist_ok=True)
+                os.chmod(_PERSONA_DIR, 0o700)
+                # Unlink any existing file first so O_EXCL defeats symlink-clobber race.
                 try:
-                    with open(fd, "w", encoding="utf-8") as fh:
-                        fh.write(persona.get("system_prompt_fragment", ""))
-                    Path(tmp_path).rename(dest)
-                    persona_file = str(dest)
-                except Exception:
-                    try:
-                        Path(tmp_path).unlink(missing_ok=True)
-                    except OSError:
-                        pass
+                    os.unlink(dest)
+                except FileNotFoundError:
+                    pass
+                fd = os.open(str(dest), os.O_CREAT | os.O_WRONLY | os.O_TRUNC | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(persona.get("system_prompt_fragment", ""))
+                persona_file = str(dest)
             except OSError:
                 pass
 

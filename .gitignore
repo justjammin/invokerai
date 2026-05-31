@@ -36,3 +36,11 @@ htmlcov/
 *.db
 .beads-credential-key
 /docs
+
+# Gas City
+.gc/
+.beads/*
+!.beads/config.yaml
+!.beads/metadata.json
+hooks/
+.runtime/

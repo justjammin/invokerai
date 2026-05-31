@@ -1043,7 +1043,7 @@ After spawn_specialist returns:
 - `INVOKERAI_GASCITY=auto` — If `gc` binary is found, enable supervisor loop; logs one-time warning on first activation
 - `INVOKERAI_GASCITY=on` — Require `gc` binary; error immediately if missing
 
-When enabled, crew steps dispatch via `gc sling --formula` with crash recovery, `bd` mail handoff, and `/tmp/invokerai-*.persona.md` temp files (swept at server startup).
+When enabled, crew steps dispatch via `gc sling --formula` with crash recovery, `bd` mail handoff, and `~/.invokerai/personas/invokerai-*.persona.md` temp files (swept at server startup).
 
 ---
 

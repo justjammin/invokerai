@@ -149,7 +149,7 @@ export INVOKERAI_GASCITY=off
 
 - **Crew routing:** Multi-agent steps dispatch via `gc sling --formula` with supervisor management and crash recovery
 - **Handoff:** Inter-agent context via `bd` mail (beads-backed) instead of JSON files
-- **Persona files:** Agent instructions written to `/tmp/invokerai-*.persona.md` per-step, swept at server startup
+- **Persona files:** Agent instructions written to `~/.invokerai/personas/invokerai-*.persona.md` per-step, swept at server startup
 - **New tool:** `get_crew_status(crew_root_bead_id)` — poll progress of a running crew (pending/running/done/failed per agent)
 
 Solo routing is unchanged regardless of Gas City setting.

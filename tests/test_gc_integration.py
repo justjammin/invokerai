@@ -305,7 +305,9 @@ class TestPersonaFileWritten:
         import agent_invoker.core as core
 
         ledger_path = tmp_path / "ledger.json"
+        persona_dir = tmp_path / "personas"
         monkeypatch.setattr(core, "_LEDGER_PATH", ledger_path)
+        monkeypatch.setattr(core, "_PERSONA_DIR", persona_dir)
         _reset_gc_cache()
 
         with patch("agent_invoker.gc_client.shutil.which", return_value="/usr/local/bin/gc"):
@@ -328,7 +330,9 @@ class TestPersonaFileWritten:
         import agent_invoker.core as core
 
         ledger_path = tmp_path / "ledger.json"
+        persona_dir = tmp_path / "personas"
         monkeypatch.setattr(core, "_LEDGER_PATH", ledger_path)
+        monkeypatch.setattr(core, "_PERSONA_DIR", persona_dir)
         _reset_gc_cache()
 
         with patch("agent_invoker.gc_client.shutil.which", return_value=None):

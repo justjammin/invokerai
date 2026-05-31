@@ -15,7 +15,8 @@ from pathlib import Path
 
 _logger = logging.getLogger("invokerai.gc_client")
 
-_TMP_PERSONA_PATTERN = "/tmp/invokerai-*.persona.md"
+_PERSONA_DIR = Path.home() / ".invokerai" / "personas"
+_TMP_PERSONA_PATTERN = str(_PERSONA_DIR / "invokerai-*.persona.md")
 _PERSONA_MAX_AGE_SECS = 7200  # 2 hours
 
 
@@ -119,12 +120,13 @@ def gc_client() -> GcClient | None:
     return client
 
 
-def _sweep_tmp_personas(tmp_dir: str = "/tmp") -> None:
-    """Delete /tmp/invokerai-*.persona.md files older than 2 hours.
+def _sweep_tmp_personas(tmp_dir: str | None = None) -> None:
+    """Delete ~/.invokerai/personas/invokerai-*.persona.md files older than 2 hours.
 
     The tmp_dir parameter exists for testing — in production leave as default.
     """
-    pattern = f"{tmp_dir}/invokerai-*.persona.md"
+    base = Path(tmp_dir) if tmp_dir else _PERSONA_DIR
+    pattern = str(base / "invokerai-*.persona.md")
     cutoff = time.time() - _PERSONA_MAX_AGE_SECS
     for path_str in glob.glob(pattern):
         p = Path(path_str)
