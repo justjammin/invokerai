@@ -4,15 +4,20 @@
 
 # InvokerAI
 
-So you just thought of your eureka idea and it's time to build it. You drop a big task into the chat, and your agent tries to do everything at once. Auth refactor AND database migration AND frontend changes, all in one context window, one generic brain, no separation. The output is fine. Not great. Fine.
+**InvokerAI is the conductor that enforces route-first discipline.** It sits between your task and your coding agent — Claude Code, Cursor, Kiro, or Copilot — and routes work to the right specialist context instead of letting your agent YOLO everything in one generic context window.
 
-InvokerAI fixes that. Pass a task and the relevant domains. It figures out which specialist to call, builds their identity, and hands them everything they need before they write a single line. You get a backend engineer when you need one. Not a generalist pretending.
+Drop a real task: "refactor the payment gateway, add the Stripe webhook, and migrate the orders table to Postgres 16." Without routing, your agent thrashes between backend, database, and infrastructure all at once. Output works. Doesn't feel great.
 
-**What it's actually doing:**
-- **Decomposition** — Complex tasks break into focused subtasks. Each agent gets only the context it needs.
-- **Specialization** — A domain-tuned persona beats generic reasoning every time. A backend engineer sees backend patterns. A test engineer catches coverage gaps the generalist missed.
-- **Parallelism** — Independent subtasks run concurrently instead of sequentially.
-- **Noise reduction** — Less context window per agent means less hallucination surface and stronger reasoning.
+With InvokerAI, you get a backend specialist for the gateway work, a database specialist for the migration, and a cloud engineer for the infrastructure. Each one gets only the context they need. Cleaner reasoning. Fewer hallucinations. Actual specialist work instead of generalist noise.
+
+**How it actually works:**
+
+- **Local ML router** — TF-IDF + KNN by default (zero downloads, ships ready). Upgrades to bge-large embeddings + RandomForest once you hit 200 logged decisions. All local. No API keys. No cloud calls. Auditable via `invoker why "task"`.
+- **Three-tier persona composition** — role selection walks domain rules → subdomain patterns → framework specifics, collapsing into one prompt fragment capped at 6000 tokens. A FastAPI task pulls all three tiers. A generic backend task pulls one or two. Tighter match, deeper context.
+- **Hard-block enforcement on Claude Code / Kiro** — PreToolUse + SubagentStart hooks gate the Agent call behind a spawn token issued by the router. No valid token, the call is denied at the platform layer. Real block, not advisory. Cursor / GitHub Copilot use soft enforcement via CLAUDE.md guidance (no hooks available), but routing is still active and agents that follow the protocol get routed correctly.
+- **Private, observable infrastructure** — Routing happens on your machine. Your decisions log to `~/.invokerai/routing_log.jsonl`. Confidence gating (70+ spawns clean, 50–69 shows runners-up, below 50 refuses). Phase 2 retraining uses only your own data. No telemetry. No external calls.
+
+84 specialist personas in the default registry. Custom registries override on collision. Confidence gates the spawn: high confidence ships clean, low confidence returns candidates and asks for clarification before anything runs.
 
 No cloud. No API keys. No config file editing. Runs entirely on your machine.
 
@@ -81,7 +86,10 @@ Here's what fires under the hood:
 spawn_specialist("build a FastAPI endpoint with Pydantic validation", domains=["backend"])
         │
         ▼
-1. Classifier runs — TF-IDF + KNN + regex signals → role = "backend-developer", confidence = 87
+1. Router scores the task — deterministic signals first (sentence shape, imperative verbs, domain
+   hits, file refs) + keyword triggers pick the role → "backend-developer", confidence = 87.
+   On low-confidence tasks (< 70) an optional local ML classifier runs as a tie-breaker and is
+   adopted only when it beats the heuristic. (Phase 1: TF-IDF + KNN, zero downloads.)
         │
         ▼
 2. Tier-tree walk — _load_persona("backend-developer")
@@ -115,44 +123,6 @@ spawn_specialist("build a FastAPI endpoint with Pydantic validation", domains=["
 The spawned agent doesn't get a name. It gets a composed behavioral contract, stacked from domain rules, subdomain patterns, and specialist depth, all assembled for this exact task. Three tiers collapse into one prompt fragment the agent runs as.
 
 The tighter the match, the deeper the stack. A FastAPI task pulls all three tiers. A generic backend task pulls one or two. Task context shapes the specialist in real time, without any manual agent selection.
-
----
-
-## Gas City Integration (Optional)
-
-Wait until you see what happens when you pair this with [Gas City](https://github.com/gastownhall/gascity).
-
-Here's the thing: InvokerAI decides *who* runs the work. Gas City actually runs it: supervised sessions, crash recovery, cross-agent handoff via `bd` mail instead of JSON files. Solo routing stays exactly the same. Crew routing gets a real supervisor loop.
-
-Gas City is the engine. InvokerAI is the GPS.
-
-**Prerequisites:**
-- `gc` binary installed: `brew install gastownhall/gascity/gascity`
-- Gas City >= current release
-- Initialized city: `gc init` (one-time setup)
-- Each project repo registered as a rig: `cd your-repo && gc rig add .`
-
-**Enable:**
-
-```bash
-# Auto-detect gc, log a warning on first activation
-export INVOKERAI_GASCITY=auto
-
-# Require gc — error immediately if missing
-export INVOKERAI_GASCITY=on
-
-# Default: disabled (manual spawn behavior unchanged)
-export INVOKERAI_GASCITY=off
-```
-
-**What changes with Gas City enabled:**
-
-- **Crew routing:** Multi-agent steps dispatch via `gc sling --formula` with supervisor management and crash recovery
-- **Handoff:** Inter-agent context via `bd` mail (beads-backed) instead of JSON files
-- **Persona files:** Agent instructions written to `~/.invokerai/personas/invokerai-*.persona.md` per-step, swept at server startup
-- **New tool:** `get_crew_status(crew_root_bead_id)` — poll progress of a running crew (pending/running/done/failed per agent)
-
-Solo routing is unchanged regardless of Gas City setting.
 
 ---
 
@@ -295,7 +265,7 @@ InvokerAI ships in two phases. Phase 1 works out of the box. Phase 2 gets smarte
 | Phase | Model | What it needs |
 |-------|-------|----------------|
 | 1 (default) | TF-IDF + KNeighborsClassifier | Nothing. Ships working, no downloads |
-| 2 | `all-mpnet-base-v2` + RandomForestClassifier | 200+ logged decisions + one ~420 MB download |
+| 2 | `BAAI/bge-large-en-v1.5` + RandomForestClassifier | 200+ logged decisions + one ~1.3 GB download |
 
 Every routing decision logs to `~/.invokerai/routing_log.jsonl`. Hit 200 entries and want the accuracy bump?
 

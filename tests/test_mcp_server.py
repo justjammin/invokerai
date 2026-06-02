@@ -62,7 +62,7 @@ class TestServerInfo:
                 tools = await client.list_tools()
                 return {t.name for t in tools}
         names = _run(_t())
-        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome", "get_handoff", "put_handoff", "get_project_context", "get_crew_status"}
+        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome", "get_handoff", "put_handoff", "get_project_context"}
 
     def test_resources_list(self):
         resources = _agent_resources()
@@ -395,7 +395,7 @@ class TestSessionLedger:
         assert s["active_role"] is None
 
     def test_ttl_expiry_clears_stale_entry(self):
-        import agent_invoker.core as _core
+        import agent_invoker.sessions as _sessions
         stale_id = "stale-session"
         stale_data = {
             stale_id: {
@@ -404,7 +404,7 @@ class TestSessionLedger:
                 "last_seen": time.time() - _LEDGER_TTL - 1,
             }
         }
-        ledger = _core._LEDGER_PATH
+        ledger = _sessions._LEDGER_PATH
         ledger.parent.mkdir(parents=True, exist_ok=True)
         ledger.write_text(json.dumps(stale_data))
         get_session("trigger-cleanup")

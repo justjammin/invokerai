@@ -172,9 +172,9 @@ class TestHandoffPathTraversal:
     def test_write_handoff_valid_id_creates_file_in_handoff_dir(
         self, tmp_path, monkeypatch
     ):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
-        monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
         write_handoff("sess-safe", "backend-developer", "build api")
         expected = tmp_path / "sess-safe.json"
         assert expected.exists()
@@ -182,9 +182,9 @@ class TestHandoffPathTraversal:
     def test_write_handoff_traversal_id_stays_inside_handoff_dir(
         self, tmp_path, monkeypatch
     ):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
-        monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
         # "../evil" → sanitized to "evil" → file lands inside tmp_path
         write_handoff("../evil", "backend-developer", "malicious task")
         # No file must exist OUTSIDE tmp_path
@@ -200,18 +200,18 @@ class TestHandoffPathTraversal:
     def test_write_handoff_empty_after_sanitize_raises(
         self, tmp_path, monkeypatch
     ):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
-        monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
         with pytest.raises(ValueError):
             write_handoff("...", "backend-developer", "task")
 
     def test_read_handoff_traversal_id_does_not_escape_handoff_dir(
         self, tmp_path, monkeypatch
     ):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
-        monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
         # "/etc/passwd" sanitised to "etcpasswd" — no file there → returns {}
         result = read_handoff("../../../etc/passwd")
         assert isinstance(result, dict)
@@ -221,16 +221,16 @@ class TestHandoffPathTraversal:
     def test_read_handoff_empty_after_sanitize_raises(
         self, tmp_path, monkeypatch
     ):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
-        monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
         with pytest.raises(ValueError):
             read_handoff("...")
 
     def test_write_then_read_roundtrip_data_intact(self, tmp_path, monkeypatch):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
-        monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
         write_handoff(
             "sess-roundtrip",
             "test-automator",
@@ -252,10 +252,10 @@ class TestHandoffPathTraversal:
 
 class TestLogOutcomeTrainingPoisoningGuard:
     def test_unknown_role_does_not_write_training_log(self, tmp_path, monkeypatch):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
         training_log = tmp_path / "training.jsonl"
-        monkeypatch.setattr(core_mod, "TRAINING_LOG_PATH", training_log)
+        monkeypatch.setattr(sessions_mod, "TRAINING_LOG_PATH", training_log)
         # accepted=True + corrections=0 triggers the feedback path — but role is unknown
         log_outcome(
             date="2026-05-21",
@@ -269,12 +269,12 @@ class TestLogOutcomeTrainingPoisoningGuard:
         assert not training_log.exists()
 
     def test_known_role_writes_training_log(self, tmp_path, monkeypatch):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
         training_log = tmp_path / "training.jsonl"
         session_log = tmp_path / "invokerai-sessions.md"
-        monkeypatch.setattr(core_mod, "TRAINING_LOG_PATH", training_log)
-        monkeypatch.setattr(core_mod, "_SESSION_LOG", session_log)
+        monkeypatch.setattr(sessions_mod, "TRAINING_LOG_PATH", training_log)
+        monkeypatch.setattr(sessions_mod, "_SESSION_LOG", session_log)
         # Create a session log entry for patch_session_log_outcome to find
         session_log.write_text(
             "### 2026-05-21 — fix auth bug\n"
@@ -294,10 +294,10 @@ class TestLogOutcomeTrainingPoisoningGuard:
         assert entry["role"] == "backend-developer"
 
     def test_injection_role_does_not_write_training_log(self, tmp_path, monkeypatch):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
         training_log = tmp_path / "training.jsonl"
-        monkeypatch.setattr(core_mod, "TRAINING_LOG_PATH", training_log)
+        monkeypatch.setattr(sessions_mod, "TRAINING_LOG_PATH", training_log)
         log_outcome(
             date="2026-05-21",
             task_prefix="test task",
@@ -310,10 +310,10 @@ class TestLogOutcomeTrainingPoisoningGuard:
         assert not training_log.exists()
 
     def test_not_accepted_does_not_write_training_log(self, tmp_path, monkeypatch):
-        import agent_invoker.core as core_mod
+        import agent_invoker.sessions as sessions_mod
 
         training_log = tmp_path / "training.jsonl"
-        monkeypatch.setattr(core_mod, "TRAINING_LOG_PATH", training_log)
+        monkeypatch.setattr(sessions_mod, "TRAINING_LOG_PATH", training_log)
         log_outcome(
             date="2026-05-21",
             task_prefix="test task",

@@ -94,8 +94,8 @@ class TestRoute:
             assert "resource_uri" in r.persona
 
     def test_persona_absent_when_no_role(self):
-        with patch("agent_invoker.core._suggest_role", return_value=None), \
-             patch("agent_invoker.core._regex_score", return_value={
+        with patch("agent_invoker.router._suggest_role", return_value=None), \
+             patch("agent_invoker.router._regex_score", return_value={
                  "routing": "crew", "suggested_role": None,
                  "confidence": 80, "source": "regex"
              }):
@@ -104,7 +104,7 @@ class TestRoute:
 
     def test_no_log_does_not_write_file(self, tmp_path):
         log_path = tmp_path / "routing_log.jsonl"
-        with patch("agent_invoker.core.LOG_PATH", log_path):
+        with patch("agent_invoker.router.LOG_PATH", log_path):
             route("fix the bug", log=False)
         assert not log_path.exists()
 
@@ -147,7 +147,7 @@ class TestLoadPersona:
 class TestRecordAcceptedRouting:
     def test_record_accepted_routing(self, tmp_path):
         training_log = tmp_path / "training.jsonl"
-        with patch("agent_invoker.core.TRAINING_LOG_PATH", training_log):
+        with patch("agent_invoker.sessions.TRAINING_LOG_PATH", training_log):
             record_accepted_routing("fix auth bug", "backend-developer", "solo")
         assert training_log.exists()
         entry = json.loads(training_log.read_text().strip())
@@ -158,7 +158,7 @@ class TestRecordAcceptedRouting:
 
     def test_auto_train_not_triggered_below_threshold(self, tmp_path):
         training_log = tmp_path / "training.jsonl"
-        with patch("agent_invoker.core.TRAINING_LOG_PATH", training_log), \
+        with patch("agent_invoker.sessions.TRAINING_LOG_PATH", training_log), \
              patch("agent_invoker.classifier.build") as mock_build:
             for _ in range(3):
                 record_accepted_routing("fix auth bug", "backend-developer", "solo")
@@ -183,8 +183,9 @@ class TestExplain:
 # ---------------------------------------------------------------------------
 
 def test_write_and_read_handoff(tmp_path, monkeypatch):
+    import agent_invoker.sessions as sessions_mod
+    monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
     import agent_invoker.core as core_mod
-    monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
     core_mod.write_handoff("sess1", "backend-developer", "build api", decisions=["use REST"], files_touched=["api.py"])
     result = core_mod.read_handoff("sess1")
     assert result["session_id"] == "sess1"
@@ -195,8 +196,9 @@ def test_write_and_read_handoff(tmp_path, monkeypatch):
 
 
 def test_read_handoff_missing_returns_empty(tmp_path, monkeypatch):
+    import agent_invoker.sessions as sessions_mod
+    monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
     import agent_invoker.core as core_mod
-    monkeypatch.setattr(core_mod, "_HANDOFF_DIR", tmp_path)
     assert core_mod.read_handoff("nonexistent") == {}
 
 
@@ -205,8 +207,9 @@ def test_read_handoff_missing_returns_empty(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_project_memory_roundtrip(tmp_path, monkeypatch):
+    import agent_invoker.sessions as sessions_mod
+    monkeypatch.setattr(sessions_mod, "_PROJECT_MEMORY_PATH", tmp_path / "pm.json")
     import agent_invoker.core as core_mod
-    monkeypatch.setattr(core_mod, "_PROJECT_MEMORY_PATH", tmp_path / "pm.json")
     core_mod.update_project_memory("myrepo", "backend-developer", ["backend"])
     core_mod.update_project_memory("myrepo", "backend-developer", ["backend"])
     core_mod.update_project_memory("myrepo", "test-automator", ["testing"])
@@ -217,8 +220,9 @@ def test_project_memory_roundtrip(tmp_path, monkeypatch):
 
 
 def test_get_project_memory_missing(tmp_path, monkeypatch):
+    import agent_invoker.sessions as sessions_mod
+    monkeypatch.setattr(sessions_mod, "_PROJECT_MEMORY_PATH", tmp_path / "pm.json")
     import agent_invoker.core as core_mod
-    monkeypatch.setattr(core_mod, "_PROJECT_MEMORY_PATH", tmp_path / "pm.json")
     assert core_mod.get_project_memory("nonexistent") == {}
 
 

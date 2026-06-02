@@ -436,7 +436,7 @@ class TestLogOutcomeCli:
             "- **Role selected:** backend-developer\n"
             "- **Confidence:** 90\n"
         )
-        monkeypatch.setattr("agent_invoker.core._SESSION_LOG", log)
+        monkeypatch.setattr("agent_invoker.sessions._SESSION_LOG", log)
         out = run_log_outcome(["2026-05-13", "Add CLI parity", "2", "true"])
         assert out == {"ok": True}
         content = log.read_text()
@@ -446,7 +446,7 @@ class TestLogOutcomeCli:
     def test_entry_not_found_returns_error(self, tmp_path, monkeypatch):
         log = tmp_path / "sessions.md"
         log.write_text("\n### 2026-05-13 — Some other task\n- **Role selected:** backend-developer\n")
-        monkeypatch.setattr("agent_invoker.core._SESSION_LOG", log)
+        monkeypatch.setattr("agent_invoker.sessions._SESSION_LOG", log)
         out = run_log_outcome(["2026-05-13", "Nonexistent prefix", "0", "false"])
         assert out["ok"] is False
         assert "error" in out
@@ -457,7 +457,7 @@ class TestLogOutcomeCli:
             "\n### 2026-05-13 — Fix auth bug\n"
             "- **Role selected:** backend-developer\n"
         )
-        monkeypatch.setattr("agent_invoker.core._SESSION_LOG", log)
+        monkeypatch.setattr("agent_invoker.sessions._SESSION_LOG", log)
         out = run_log_outcome(["2026-05-13", "Fix auth bug", "1", "false"])
         assert out == {"ok": True}
         assert "**First-pass accepted:** no" in log.read_text()

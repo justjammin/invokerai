@@ -18,7 +18,6 @@ Start:
 from __future__ import annotations
 
 import logging
-import os
 import time
 from pathlib import Path
 from typing import Annotated
@@ -26,39 +25,7 @@ from typing import Annotated
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image  # noqa: F401 — keep for future use
 
-from agent_invoker.gc_client import gc_client, _sweep_tmp_personas, GcError
-
-INVOKERAI_GASCITY = os.environ.get("INVOKERAI_GASCITY", "off")
-
-# Sweep stale persona temp files at server startup.
-_sweep_tmp_personas()
-
-_gc_auto_warned: bool = False
-
 MAX_TASK_LEN = 4096
-
-
-def _gc_effective() -> "GcClient | None":  # type: ignore[name-defined]  # noqa: F821
-    """Return GcClient only when gc is available AND INVOKERAI_GASCITY enables it.
-
-    INVOKERAI_GASCITY=off  → always None (disabled)
-    INVOKERAI_GASCITY=on   → use gc if binary found
-    INVOKERAI_GASCITY=auto → use gc if found; log a one-time warning on first detection
-    """
-    global _gc_auto_warned
-    if INVOKERAI_GASCITY == "off":
-        return None
-    client = gc_client()
-    if client is None:
-        return None
-    if INVOKERAI_GASCITY == "auto" and not _gc_auto_warned:
-        _gc_auto_warned = True
-        _logger.warning(
-            "Gas City detected (INVOKERAI_GASCITY=auto). "
-            "Crew routing will use gc supervisor. "
-            "Set INVOKERAI_GASCITY=off to disable."
-        )
-    return client
 
 _SPAWN_TOKEN = Path.home() / ".invokerai" / "spawn_token"
 _AGENTS_DIR = Path.home() / ".claude" / "agents"
@@ -176,8 +143,6 @@ def spawn_specialist(
     }
     if result.persona:
         out["persona"] = result.persona
-    if result.persona_file:
-        out["persona_file"] = result.persona_file
     out["pattern"] = result.pattern
     out["steps"] = result.steps
     if result.reasoning:
@@ -308,65 +273,6 @@ def decompose_task(
         "pattern": result.pattern,
         "steps": result.steps,
         "domain_roles": [{"domain": d, "role": r} for d, r in result.domain_roles],
-    }
-
-
-_STATUS_MAP = {
-    "open": "pending",
-    "in_progress": "running",
-    "claimed": "running",
-    "closed": "done",
-    "discarded": "failed",
-}
-
-
-@mcp.tool(
-    description=(
-        "Get status of a running Gas City crew. "
-        "Returns step-level status for each agent in the crew."
-    )
-)
-def get_crew_status(crew_root_bead_id: str) -> dict:
-    crew_root_bead_id = (crew_root_bead_id or "")[:MAX_TASK_LEN]
-    client = _gc_effective()
-    if client is None:
-        return {"error": "Gas City not available", "crew_root_bead_id": crew_root_bead_id}
-
-    try:
-        root_bead = client.run(["bd", "show", crew_root_bead_id, "--json"])
-        root_status = _STATUS_MAP.get(root_bead.get("status", ""), root_bead.get("status", "unknown"))
-    except GcError:
-        return {"error": "Gas City not available", "crew_root_bead_id": crew_root_bead_id}
-
-    try:
-        step_beads_result = client.run([
-            "bd", "list",
-            "--parent", crew_root_bead_id,
-            "--json",
-            "--limit", "50",
-        ])
-        if isinstance(step_beads_result, list):
-            step_beads = step_beads_result
-        else:
-            step_beads = step_beads_result.get("items", [])
-    except GcError:
-        step_beads = []
-
-    steps = []
-    for i, bead in enumerate(step_beads, start=1):
-        raw_status = bead.get("status", "")
-        steps.append({
-            "step": i,
-            "role": bead.get("title") or "unknown",
-            "status": _STATUS_MAP.get(raw_status, raw_status or "unknown"),
-            "started_at": bead.get("claimed_at"),
-            "completed_at": bead.get("closed_at"),
-        })
-
-    return {
-        "crew_id": crew_root_bead_id,
-        "crew_status": root_status,
-        "steps": steps,
     }
 
 

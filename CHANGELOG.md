@@ -8,15 +8,16 @@ Format: [Semantic Versioning](https://semver.org). Types: Added, Changed, Fixed,
 
 ## [Unreleased]
 
-### Gas City Integration
-- Optional Gas City runtime for crew routing (INVOKERAI_GASCITY env var: off/auto/on)
-- `get_crew_status` MCP tool for crew progress monitoring (pending/running/done/failed per agent)
-- Handoff authority locking: session-scoped via `bd` mail or file, never merged
-- Persona files written to ~/.invokerai/personas/invokerai-*.persona.md, swept at server startup
-- GcClient subprocess wrapper with typed error surface and 300s TTL cache
-- Default INVOKERAI_GASCITY=off — no behavior change for existing users
+### Removed
+- Gas City integration as executor: `INVOKERAI_GASCITY` env var, `get_crew_status` MCP tool, GcClient subprocess wrapper, persona file writes, formula synthesis, per-session dolt instances
+- Handoff authority locking (session-scoped mail vs file split) — handoff is now file-only, lossless, and fully local
 
 ### Added
+- Bead-graph DAG emitter in `decompose()` — `DecomposeResult` carries internal DAG descriptor for future headless executor integrations (not yet MCP-exposed)
+- Bead-graph dependency rules: parallel fan-in/gate-out, serial chaining, loop/expand annotations for feedback and hierarchical patterns
+- Host-executor model: multi-agent crews orchestrated by host agent (Claude Code) with native handoff between steps
+
+### Changed
 - Confidence-aware dispatch: `spawn_authorized` now gates on confidence ≥ 50. Low confidence (< 50) returns `clarification_needed: true` + `candidates[]`. Medium (50–69) returns `confidence_warning` + optional `runner_up`.
 - `reasoning[]` field on `spawn_specialist` and `route_task` responses — explains which trigger fired, runner-ups, confidence source
 - Routing feedback loop: `confirm_route` (when confirmed) and `log_outcome` (accepted=True, corrections=0) write to `~/.invokerai/training.jsonl`. Auto-retrains Phase 1 classifier at every 50 confirmed examples.

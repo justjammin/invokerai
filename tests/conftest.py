@@ -15,7 +15,7 @@ def clean_spawn_token(tmp_path):
 def clean_ledger(tmp_path, monkeypatch):
     """Redirect ledger to a temp file so tests don't touch real user state."""
     test_ledger = tmp_path / "ledger.json"
-    monkeypatch.setattr("agent_invoker.core._LEDGER_PATH", test_ledger)
+    monkeypatch.setattr("agent_invoker.sessions._LEDGER_PATH", test_ledger)
     yield
     if test_ledger.exists():
         test_ledger.unlink()
