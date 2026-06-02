@@ -67,7 +67,7 @@ _BANNER = r"""
 
 mcp = FastMCP("invokerai", version="0.2.0", instructions=_BANNER.strip())
 
-from agent_invoker.core import append_session_log, get_session, update_session, patch_session_log_outcome, record_accepted_routing, read_handoff, write_handoff, get_project_memory, update_project_memory, _is_valid_role
+from agent_invoker.core import append_session_log, get_session, update_session, patch_session_log_outcome, record_accepted_routing, read_handoff, write_handoff, get_project_memory, update_project_memory, _is_valid_role, _load_persona
 
 
 def _write_spawn_token(count: int) -> None:
@@ -273,6 +273,7 @@ def decompose_task(
         "pattern": result.pattern,
         "steps": result.steps,
         "domain_roles": [{"domain": d, "role": r} for d, r in result.domain_roles],
+        "bead_graph": result.bead_graph,
     }
 
 
@@ -330,8 +331,8 @@ def log_outcome(
         "Call at the start of a crew step to pick up where the last agent left off."
     )
 )
-def get_handoff(session_id: str) -> dict:
-    return read_handoff(session_id) or {"session_id": session_id, "steps_completed": [], "decisions": [], "open_questions": [], "files_touched": []}
+def get_handoff(session_id: str, deps: list[str] | None = None) -> dict:
+    return read_handoff(session_id, deps=deps) or {"session_id": session_id, "steps_completed": [], "decisions": [], "open_questions": [], "files_touched": []}
 
 
 @mcp.tool(
@@ -348,8 +349,9 @@ def put_handoff(
     decisions: list[str] | None = None,
     open_questions: list[str] | None = None,
     files_touched: list[str] | None = None,
+    node_id: str | None = None,
 ) -> dict:
-    return write_handoff(session_id, role, task, decisions, open_questions, files_touched)
+    return write_handoff(session_id, role, task, decisions, open_questions, files_touched, node_id=node_id)
 
 
 @mcp.tool(
@@ -369,6 +371,18 @@ def get_project_context(project_id: str) -> dict:
         "last_domains": mem.get("last_domains", []),
         "last_updated": mem.get("last_updated"),
     }
+
+
+@mcp.tool(
+    description=(
+        "Return the composed persona fragment for a known specialist role. "
+        "Use this to fetch a node's persona by its bead_graph role WITHOUT re-routing via spawn_specialist. "
+        "Returns {resource_uri, system_prompt_fragment} — the same composed fragment as the spawn bundle's persona. "
+        "Pass task to allow subdomain/tier selection (optional; empty string gives the base persona)."
+    )
+)
+def persona_for_role(role: str, task: str = "") -> dict:
+    return _load_persona(role, task)
 
 
 # ── resources ─────────────────────────────────────────────────────────────────

@@ -504,12 +504,12 @@ Response:
 
 ---
 
-### `get_handoff` — READ PRIOR CONTEXT
+### `get_handoff` — READ PRIOR CONTEXT (DEP-SCOPED OR CUMULATIVE)
 
-Agents in a crew can read context left by previous agents in the same session. Read handoff artifact to understand decisions, open questions, and files touched by prior steps.
+Agents in a crew can read context left by previous agents in the same session. Read handoff artifact to understand decisions, open questions, and files touched by prior steps. NEW: Scoped reads via `deps` parameter for context sharing in pseudo-agent pattern.
 
 **Description:**  
-Read handoff artifact for a session — context left by previous agents in a crew workflow.
+Read handoff artifact for a session — context left by previous agents in a crew workflow. Optionally scoped to specific dependency nodes.
 
 **Annotations:**
 ```json
@@ -527,6 +527,11 @@ Read handoff artifact for a session — context left by previous agents in a cre
     "session_id": {
       "type": "string",
       "description": "Session ID for this crew step (required)"
+    },
+    "deps": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional node IDs to scope handoff read (e.g., ['s1', 's2']). If omitted or empty, returns full cumulative context."
     }
   },
   "required": ["session_id"]
@@ -565,50 +570,80 @@ Read handoff artifact for a session — context left by previous agents in a cre
 |-------|------|---|
 | `session_id` | string | Session ID |
 | `last_updated` | number | Unix timestamp of last update |
-| `steps_completed` | array | Prior steps: role, task, timestamp |
-| `decisions` | array | Key decisions made by prior agents |
-| `open_questions` | array | Unresolved questions for current/next agent |
-| `files_touched` | array | Files modified by prior steps |
+| `steps_completed` | array | Completed steps in this scope: role, task, timestamp |
+| `decisions` | array | Key decisions (union of scoped per-node decisions) |
+| `open_questions` | array | Unresolved questions (union of scoped per-node open_questions) |
+| `files_touched` | array | Files modified (union of scoped per-node files_touched) |
 
-**Example:**
+**Scoping semantics (NEW — deps parameter):**
+
+| deps | Behavior | Use case |
+|------|----------|----------|
+| `null` or omitted | Return full cumulative context across ALL completed steps | First node; needs all prior context |
+| `[]` (empty array) | Same as null — full cumulative | Explicit "give me everything" |
+| `["s1"]` | ONLY the per-node output from step s1 (attached when s1 called `put_handoff(..., node_id="s1")`) | Step s2 depends on s1 only; skip noise |
+| `["s1", "s3"]` | Union of per-node outputs from s1 and s3 | Step depends on multiple ancestors |
+
+**Per-node attachment (NEW):**
+When `put_handoff(..., node_id="s1")` is called, the step's decisions/files/open_questions are ALSO stored in a per-node record. Later, `get_handoff(session_id, deps=["s1"])` returns ONLY that node's decisions, not all prior decisions. This enables "context flows along DAG edges" — each node sees only what it depends on.
+
+**Example — Cumulative (full context):**
 ```json
 Request:
 {
   "session_id": "ses_auth_flow"
 }
 
-Response:
+Response (all prior steps):
 {
   "session_id": "ses_auth_flow",
   "last_updated": 1705000000,
   "steps_completed": [
-    {
-      "role": "architect-reviewer",
-      "task": "Design authentication system",
-      "ts": 1705000000
-    }
+    {"role": "architect", "task": "Design authentication system", "ts": 1705000000},
+    {"role": "backend-developer", "task": "Implement JWT", "ts": 1705000100}
+  ],
+  "decisions": [
+    "JWT tokens with 24h expiration",
+    "Refresh tokens stored in HttpOnly cookies",
+    "Used PyJWT library"
+  ],
+  "open_questions": ["Should we implement rate limiting on login attempts?"],
+  "files_touched": ["/src/auth/models.py", "/src/auth/routes.py"]
+}
+```
+
+**Example — Scoped to dependencies (DAG-aware):**
+```json
+Request:
+{
+  "session_id": "ses_auth_flow",
+  "deps": ["s1"]
+}
+
+Response (only s1 architect step):
+{
+  "session_id": "ses_auth_flow",
+  "last_updated": 1705000000,
+  "steps_completed": [
+    {"role": "architect", "task": "Design authentication system", "ts": 1705000000}
   ],
   "decisions": [
     "JWT tokens with 24h expiration",
     "Refresh tokens stored in HttpOnly cookies"
   ],
-  "open_questions": [
-    "Should we implement rate limiting on login attempts?"
-  ],
-  "files_touched": [
-    "/src/auth/models.py"
-  ]
+  "open_questions": [],
+  "files_touched": []
 }
 ```
 
 ---
 
-### `put_handoff` — WRITE CONTEXT FOR NEXT AGENT
+### `put_handoff` — WRITE CONTEXT FOR NEXT AGENT (with per-node tracking)
 
-Write your progress and context when completing a crew step. Next agent reads this via `get_handoff` to understand what you did, what you decided, and what questions remain.
+Write your progress and context when completing a crew step. Next agent reads this via `get_handoff` to understand what you did, what you decided, and what questions remain. NEW: Optional `node_id` for per-node attachment (DAG-aware context sharing).
 
 **Description:**  
-Write handoff context after completing a crew step. Subsequent agents in the workflow read this via `get_handoff`.
+Write handoff context after completing a crew step. Subsequent agents in the workflow read this via `get_handoff`. When `node_id` is provided, the step's decisions/files/open_questions are ALSO stored per-node for dep-scoped reads.
 
 **Input schema:**
 ```json
@@ -641,6 +676,10 @@ Write handoff context after completing a crew step. Subsequent agents in the wor
       "type": "array",
       "items": {"type": "string"},
       "description": "Absolute file paths modified (optional)"
+    },
+    "node_id": {
+      "type": "string",
+      "description": "DAG node ID (e.g., 's1', 's2') — when set, attaches this step's context to the per-node record for dep-scoped get_handoff reads (optional)"
     }
   },
   "required": ["session_id", "role", "task"]
@@ -650,24 +689,60 @@ Write handoff context after completing a crew step. Subsequent agents in the wor
 **Response:**  
 Same shape as `get_handoff` — returns updated artifact.
 
-**Example:**
+**Node attachment semantics (NEW — node_id parameter):**
+
+When `node_id` is provided:
+1. The step's decisions/files/open_questions are appended to the flat cumulative lists (as before)
+2. ALSO stored in a per-node record keyed by `node_id`
+3. Later, `get_handoff(session_id, deps=[node_id])` returns ONLY that node's per-node lists
+
+This enables "context flows along DAG edges": downstream steps see only their direct dependencies, not noise from unrelated steps.
+
+**Example — with node_id (DAG-aware):**
+```json
+Request:
+{
+  "session_id": "ses_auth_flow",
+  "role": "architect",
+  "task": "Design authentication system",
+  "node_id": "s1",
+  "decisions": [
+    "JWT tokens with 24h expiration",
+    "Refresh tokens stored in HttpOnly cookies"
+  ],
+  "open_questions": [],
+  "files_touched": []
+}
+
+Response:
+{
+  "session_id": "ses_auth_flow",
+  "last_updated": 1705000000,
+  "steps_completed": [
+    {
+      "role": "architect",
+      "task": "Design authentication system",
+      "ts": 1705000000,
+      "node_id": "s1"
+    }
+  ],
+  "decisions": ["JWT tokens with 24h expiration", "Refresh tokens stored in HttpOnly cookies"],
+  "open_questions": [],
+  "files_touched": []
+}
+```
+
+Later, `get_handoff(session_id, deps=["s1"])` returns the same decisions (from the per-node record).
+
+**Example — without node_id (legacy, cumulative only):**
 ```json
 Request:
 {
   "session_id": "ses_auth_flow",
   "role": "backend-developer",
   "task": "Implement JWT authentication",
-  "decisions": [
-    "Used PyJWT for token management",
-    "Refresh tokens expire in 7 days"
-  ],
-  "open_questions": [
-    "Should login endpoint rate-limit failed attempts?"
-  ],
-  "files_touched": [
-    "/src/auth/routes.py",
-    "/src/auth/models.py"
-  ]
+  "decisions": ["Used PyJWT for token management"],
+  "files_touched": ["/src/auth/routes.py"]
 }
 
 Response:
@@ -676,7 +751,7 @@ Response:
   "last_updated": 1705000100,
   "steps_completed": [
     {
-      "role": "architect-reviewer",
+      "role": "architect",
       "task": "Design authentication system",
       "ts": 1705000000
     },
@@ -687,15 +762,247 @@ Response:
     }
   ],
   "decisions": [...],
-  "open_questions": [...],
   "files_touched": [...]
 }
 ```
 
 **When to use:**
 - Always call at the end of a crew step
-- Before spawning the next agent
+- Include `node_id` if orchestrating a multi-step DAG (pseudo-agent pattern) — enables dep-scoped context
+- Omit `node_id` for legacy handoff (cumulative context only)
 - Provide context that saves time for downstream agents
+
+---
+
+### `decompose_task` — DECOMPOSE MULTI-STEP TASKS
+
+Decompose a task into a multi-agent workflow. Returns execution steps, dependency graph (bead_graph), and domain assignments. Use for crew routing and to orchestrate multi-specialist flows via the pseudo-agent context sharer.
+
+**Description:**  
+Break down a task into multi-agent steps with dependency metadata. Returns execution pattern, step records, and bead-graph DAG for orchestration.
+
+**Annotations:**
+```json
+{
+  "readOnlyHint": true,
+  "idempotentHint": true
+}
+```
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "task": {
+      "type": "string",
+      "description": "Task text to decompose"
+    },
+    "domains": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional domain hints (architecture, backend, frontend, database, etc.)"
+    },
+    "custom_registry": {
+      "type": "string",
+      "description": "Optional path to custom agents JSON"
+    }
+  },
+  "required": ["task"]
+}
+```
+
+**Response:**
+```json
+{
+  "pattern": "pipeline" | "parallel" | "feedback_loop" | "hierarchical",
+  "steps": [
+    {
+      "id": "s1",
+      "role": "architect",
+      "action": "Design the implementation plan",
+      "parallel": false
+    },
+    {
+      "id": "s2",
+      "role": "backend-developer",
+      "action": "Implement the API endpoints",
+      "parallel": false,
+      "depends_on": ["s1"]
+    }
+  ],
+  "bead_graph": {
+    "root": {
+      "title": "Multi-step task",
+      "type": "epic"
+    },
+    "nodes": [
+      {
+        "id": "s1",
+        "role": "architect",
+        "action": "Design the implementation plan",
+        "deps": [],
+        "annotation": null
+      },
+      {
+        "id": "s2",
+        "role": "backend-developer",
+        "action": "Implement the API endpoints",
+        "deps": ["s1"],
+        "annotation": null
+      }
+    ]
+  },
+  "domain_roles": [
+    {"domain": "architecture", "role": "architect"},
+    {"domain": "backend", "role": "backend-developer"}
+  ]
+}
+```
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|---|
+| `pattern` | string | Execution pattern: "pipeline" (serial), "parallel" (fan-out), "feedback_loop" (critic + iterate), "hierarchical" (supervisor expands) |
+| `steps` | array | Execution steps with role, action, dependency info |
+| `bead_graph` | object | DAG descriptor with nodes, dependencies, and annotations (for orchestrator/visualization) |
+| `bead_graph.root` | object | Root epic: title (max 80 chars) and type |
+| `bead_graph.nodes[]` | array | DAG nodes: id, role, action, deps (list of node IDs this depends on), annotation |
+| `bead_graph.nodes[].annotation` | string \| null | null (no special behavior) \| "loop" (feedback/critic step) \| "expand" (supervisor/hierarchical step) |
+| `domain_roles` | array | Domain-to-role mappings for the crew |
+
+**Example — Pipeline (serial steps):**
+```json
+Request:
+{
+  "task": "Design and implement a new payment processing system",
+  "domains": ["architecture", "backend", "database"]
+}
+
+Response:
+{
+  "pattern": "pipeline",
+  "steps": [
+    {
+      "id": "s1",
+      "role": "architect",
+      "action": "Design system architecture and API contract"
+    },
+    {
+      "id": "s2",
+      "role": "backend-developer",
+      "action": "Implement payment processing endpoints"
+    },
+    {
+      "id": "s3",
+      "role": "database-optimizer",
+      "action": "Optimize transaction schema and queries"
+    }
+  ],
+  "bead_graph": {
+    "root": {"title": "Payment processing system", "type": "epic"},
+    "nodes": [
+      {"id": "s1", "role": "architect", "action": "Design...", "deps": [], "annotation": null},
+      {"id": "s2", "role": "backend-developer", "action": "Implement...", "deps": ["s1"], "annotation": null},
+      {"id": "s3", "role": "database-optimizer", "action": "Optimize...", "deps": ["s2"], "annotation": null}
+    ]
+  },
+  "domain_roles": [
+    {"domain": "architecture", "role": "architect"},
+    {"domain": "backend", "role": "backend-developer"},
+    {"domain": "database", "role": "database-optimizer"}
+  ]
+}
+```
+
+**When to use:**
+- Multi-specialist workflows (crews)
+- Understanding task decomposition before orchestrating steps
+- Planning and visualization of multi-agent flows
+- As input to the pseudo-agent context sharer (see CLAUDE.md node)
+
+---
+
+### `persona_for_role` — GET COMPOSED PERSONA (NEW)
+
+Fetch the composed system_prompt_fragment for a known specialist role WITHOUT re-routing the task. Use this when you already know which persona you need (e.g., orchestrating a specific node in a bead_graph).
+
+**Description:**  
+Return the system_prompt_fragment for a known specialist role. Does NOT route the task — just looks up the role's persona. Distinct from `spawn_specialist` (which routes) and `agent_profile` (which returns the full agent file).
+
+**Annotations:**
+```json
+{
+  "readOnlyHint": true,
+  "idempotentHint": true
+}
+```
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "Specialist role ID (e.g., 'backend-developer', 'architect')"
+    },
+    "task": {
+      "type": "string",
+      "description": "Optional task context for persona composition (optional)"
+    }
+  },
+  "required": ["role"]
+}
+```
+
+**Response:**
+```json
+{
+  "role": "backend-developer",
+  "resource_uri": "agent://backend-developer",
+  "system_prompt_fragment": "You are a senior backend engineer with deep expertise in API design, database optimization, and caching strategies. When working on payment systems, prioritize security and idempotency. Focus on performance metrics and backward compatibility."
+}
+```
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|---|
+| `role` | string | The requested role ID |
+| `resource_uri` | string | MCP resource URI for full agent profile |
+| `system_prompt_fragment` | string | Composed system prompt (200–500 tokens); may be contextualized by task param |
+
+**Example:**
+```json
+Request:
+{
+  "role": "architect",
+  "task": "Design authentication system"
+}
+
+Response:
+{
+  "role": "architect",
+  "resource_uri": "agent://architect",
+  "system_prompt_fragment": "You are a systems architect focused on designing scalable, secure infrastructure. For authentication systems, prioritize zero-trust principles, token lifecycle, and rate limiting. Produce design documents that guide implementation teams."
+}
+```
+
+**Comparison:**
+
+| Tool | Use case | Routes task | Returns persona | Returns full profile |
+|------|----------|-------------|-----------------|---------------------|
+| `spawn_specialist` | Route a task + authorize spawn | YES | YES (fragment) | NO |
+| `persona_for_role` | Get persona for a KNOWN role | NO | YES (fragment) | NO |
+| `agent_profile` | Inspect full agent definition | NO | NO | YES |
+
+**When to use:**
+- Orchestrating a specific DAG node (you know the role; need the persona)
+- Pseudo-agent context sharer loop (adopt persona per node)
+- Composing multi-step personas without re-routing
+- Task-contextualized persona hints (optional `task` param)
 
 ---
 
@@ -898,6 +1205,102 @@ All tools follow JSON-RPC 2.0 error conventions.
   }
 }
 ```
+
+---
+
+## Context Sharing Loop (Pseudo-Agent Pattern)
+
+When orchestrating a multi-step crew task, use the pseudo-agent context sharer: one orchestrator agent sequentially adopts specialist personas while sharing context via a distributed handoff store.
+
+**Complete example: Design + implement + review a payment system**
+
+```
+Task: "Design and implement a payment processing system"
+
+Step 1. Decompose:
+  POST decompose_task {"task": "Design and implement...", "domains": ["architecture", "backend"]}
+  ← {"bead_graph": {"nodes": [
+       {"id": "s1", "role": "architect", "deps": []},
+       {"id": "s2", "role": "backend-developer", "deps": ["s1"]},
+       {"id": "s3", "role": "code-reviewer", "deps": ["s2"]}
+     ]}, "steps": [...]}
+
+Step 2. Walk DAG in dependency order:
+
+  === Node s1: Architect ===
+  POST persona_for_role {"role": "architect", "task": "Design..."}
+  ← {"system_prompt_fragment": "You are a systems architect...", "resource_uri": "agent://architect"}
+  
+  [ADOPT this persona for this step]
+  [Work as architect: create design document, decide API contract, etc.]
+  
+  POST put_handoff {
+    "session_id": "ses_payment_system",
+    "role": "architect",
+    "task": "Design payment system architecture",
+    "node_id": "s1",
+    "decisions": ["Stripe integration for payment processing", "PostgreSQL for transactions"],
+    "files_touched": ["/docs/ARCHITECTURE.md"]
+  }
+  ← updated handoff artifact
+
+  === Node s2: Backend Developer (depends on s1) ===
+  POST persona_for_role {"role": "backend-developer", "task": "Implement..."}
+  ← {"system_prompt_fragment": "You are a senior backend engineer...", "resource_uri": "agent://backend-developer"}
+  
+  POST get_handoff {"session_id": "ses_payment_system", "deps": ["s1"]}
+  ← {
+      "decisions": ["Stripe integration for payment processing", "PostgreSQL for transactions"],
+      "open_questions": [],
+      "files_touched": ["/docs/ARCHITECTURE.md"]
+    }
+  [Now you have ONLY s1's output, not unrelated decisions from other branches]
+  
+  [ADOPT backend persona]
+  [Work as backend-developer: implement API endpoints following s1's design]
+  
+  POST put_handoff {
+    "session_id": "ses_payment_system",
+    "role": "backend-developer",
+    "task": "Implement payment endpoints",
+    "node_id": "s2",
+    "decisions": ["Used FastAPI for endpoints", "Webhook handler for Stripe events"],
+    "files_touched": ["/src/payments/routes.py", "/src/payments/models.py"]
+  }
+  ← updated handoff
+
+  === Node s3: Code Reviewer (depends on s2) ===
+  POST persona_for_role {"role": "code-reviewer", "task": "Review..."}
+  ← {"system_prompt_fragment": "You are a code quality specialist...", "resource_uri": "agent://code-reviewer"}
+  
+  POST get_handoff {"session_id": "ses_payment_system", "deps": ["s2"]}
+  ← {
+      "decisions": ["Used FastAPI for endpoints", "Webhook handler for Stripe events"],
+      "files_touched": ["/src/payments/routes.py", "/src/payments/models.py"]
+    }
+  
+  [ADOPT code-reviewer persona]
+  [Work as code-reviewer: audit s2's implementation against s1's design]
+  
+  POST put_handoff {
+    "session_id": "ses_payment_system",
+    "role": "code-reviewer",
+    "task": "Review payment implementation",
+    "node_id": "s3",
+    "decisions": ["Approved; added security notes for webhook validation"],
+    "open_questions": []
+  }
+
+Result: One orchestrator agent wore three personas sequentially, with context flowing along DAG edges. NO second process, NO extra API keys.
+```
+
+**Key mechanics:**
+- **decompose_task** → returns `bead_graph` describing the execution plan
+- **persona_for_role** → adopts the right system prompt for each step (no re-routing)
+- **get_handoff(deps=[...])** → fetches ONLY upstream dependencies' output (context scoped to the DAG)
+- **put_handoff(node_id=...)** → attaches this step's output to the DAG node for downstream scoped reads
+- Sequential execution of nodes in dependency order (orchestrator decides concurrency if parallel=true)
+- Annotations (`"loop"`, `"expand"`) are orchestrator hints — implement iteration/sub-spawning in your loop logic
 
 ---
 

@@ -13,9 +13,16 @@ Format: [Semantic Versioning](https://semver.org). Types: Added, Changed, Fixed,
 - Handoff authority locking (session-scoped mail vs file split) — handoff is now file-only, lossless, and fully local
 
 ### Added
-- Bead-graph DAG emitter in `decompose()` — `DecomposeResult` carries internal DAG descriptor for future headless executor integrations (not yet MCP-exposed)
+- `persona_for_role(role, task?)` MCP tool — fetch composed system_prompt_fragment for a KNOWN specialist role (no re-routing; complements spawn_specialist)
+- `bead_graph` field now exposed via `decompose_task()` response — public MCP surface for DAG scheduling and orchestration
+- Per-node handoff attachment: `put_handoff(..., node_id="s1")` creates per-node records for dependency-scoped reads
+- Dependency-scoped `get_handoff(session_id, deps=["s1"])` — return only upstream dependencies' context, not all prior steps (enables "context flows along DAG edges")
+- Pseudo cross-agent context sharer pattern — one orchestrator sequentially adopts specialist personas with dep-scoped handoff (see ADR-003 and CLAUDE.md setup node)
+- Multi-step crew guidance in CLAUDE.md node: "Multi-Step Crew / Context Sharing" subsection teaches decompose → persona_for_role → dep-scoped get_handoff → work → put_handoff(node_id) loop
+- Bead-graph DAG emitter in `decompose()` — `DecomposeResult` carries DAG descriptor with dependencies and annotations for multi-agent orchestration
 - Bead-graph dependency rules: parallel fan-in/gate-out, serial chaining, loop/expand annotations for feedback and hierarchical patterns
 - Host-executor model: multi-agent crews orchestrated by host agent (Claude Code) with native handoff between steps
+- ADR-003: Pseudo Cross-Agent Context Sharer — documents persona adoption, dep-scoped handoff, and honest limitations (pseudo not true parallel, orchestrator implements annotations)
 
 ### Changed
 - Confidence-aware dispatch: `spawn_authorized` now gates on confidence ≥ 50. Low confidence (< 50) returns `clarification_needed: true` + `candidates[]`. Medium (50–69) returns `confidence_warning` + optional `runner_up`.

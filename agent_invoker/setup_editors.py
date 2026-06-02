@@ -76,7 +76,37 @@ mcp__invokerai__spawn_specialist(task: str, domains: list[str], complexity: str 
 
 **SKILL BYPASS:** When running inside a skill invocation (/graphify, /kyoko, /hyperframes,
 /remotion, /weave, etc.), do NOT call mcp__invokerai__spawn_specialist. Skills manage their own
-agent spawning. InvokerAI routing applies only to direct user tasks."""
+agent spawning. InvokerAI routing applies only to direct user tasks.
+
+### Multi-Step Crew / Context Sharing (Pseudo-Agent Pattern)
+
+When a task spans multiple specialists, InvokerAI implements a **pseudo-agent context sharer**: one orchestrator agent sequentially wears specialist personas with a shared blackboard (the handoff store). NO second process, NO extra API keys — just the main Claude Code agent decomposing work and flowing context between personas via MCP.
+
+**Single specialist tasks** continue using `spawn_specialist` as before.
+
+**Multi-step / crew tasks** follow this loop:
+
+1. **Decompose:** Call `decompose_task(task, domains)` → receive `bead_graph` (DAG of steps + dependencies)
+2. **Walk DAG:** For each node in dependency order (node is ready when all `deps` are complete):
+   - **Adopt persona:** Call `persona_for_role(node.role, task)` → get the composed system_prompt_fragment for this node
+   - **Fetch upstream context:** Call `get_handoff(session_id, deps=node.deps)` → receive ONLY the output from the node's dependencies (decisions, files, open questions)
+   - **Work the step:** Execute the step AS this persona, with that scoped context
+   - **Hand off:** Call `put_handoff(session_id, role=node.role, task=node.action, node_id=node.id, decisions=[...], files_touched=[...])` → write this node's output (attached to node_id for per-step tracking)
+3. **Next node:** Pick up its dependencies' output (context "flows" between personas though it's one agent wearing hats)
+
+**Key tools:**
+- `decompose_task(task, domains, custom_registry)` → returns `bead_graph` alongside `pattern` and `steps`
+- `persona_for_role(role, task)` → returns `{resource_uri, system_prompt_fragment}` for the composed persona (KNOWN role, no re-routing)
+- `get_handoff(session_id, deps=[...])` → deps=None or [] = full cumulative context; deps=[s1,s2] = ONLY those nodes' per-node output
+- `put_handoff(session_id, role, task, node_id, decisions, files_touched)` → node_id attaches step output to the DAG node for dep-scoped reads
+
+**Honest framing:** This is ONE real agent sequentially wearing personas with a shared blackboard — NOT separate processes. Context SHARES (via dep-scoped handoff) and routes per-node personas, giving multi-agent behavior without extra runtimes. Loop and expand annotations in the DAG are orchestrator hints (your code implements iteration/sub-spawning as needed), not automatic. The DAG carries ordering + concurrency; the orchestrator acts on it.
+
+**Example flow:**
+- Step s1 (architect): `persona_for_role("architect", task)` + `put_handoff(session_id, role="architect", node_id="s1", decisions=[...])`
+- Step s2 (backend-dev): `get_handoff(session_id, deps=["s1"])` → reads only s1's output
+- Step s3 (reviewer): `get_handoff(session_id, deps=["s2"])` → reads s2's output
+Context flows linearly; if DAG shows parallel steps, orchestrator decides how to interleave personas."""
 
 CLAUDE_MD_NODE = f"{INVOKERAI_MARKER_START}\n{_INVOKERAI_NODE_BODY}\n{INVOKERAI_MARKER_END}"
 AGENTS_MD_NODE = CLAUDE_MD_NODE

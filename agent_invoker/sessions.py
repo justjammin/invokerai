@@ -140,7 +140,7 @@ def _get_session_handoff_backend(session_id: str) -> str:
     return "file"
 
 
-def read_handoff(session_id: str) -> dict:
+def read_handoff(session_id: str, deps: list[str] | None = None) -> dict:
     safe_id = _sanitize_session_id(session_id)
     path = _HANDOFF_DIR / f"{safe_id}.json"
     if not path.resolve().is_relative_to(_HANDOFF_DIR.resolve()):
@@ -148,9 +148,31 @@ def read_handoff(session_id: str) -> dict:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text())
+        full = json.loads(path.read_text())
     except Exception:
         return {}
+
+    if not deps:
+        return full
+
+    # Filter to only the steps whose node_id is in deps; union their per-step lists.
+    matching_steps = [s for s in full.get("steps_completed", []) if s.get("node_id") in deps]
+    decisions: list[str] = []
+    open_questions: list[str] = []
+    files_touched: list[str] = []
+    for step in matching_steps:
+        decisions.extend(step.get("decisions", []))
+        open_questions.extend(step.get("open_questions", []))
+        files_touched.extend(step.get("files_touched", []))
+
+    return {
+        "session_id": full.get("session_id", safe_id),
+        "last_updated": full.get("last_updated"),
+        "steps_completed": matching_steps,
+        "decisions": decisions,
+        "open_questions": open_questions,
+        "files_touched": files_touched,
+    }
 
 
 def write_handoff(
@@ -160,10 +182,16 @@ def write_handoff(
     decisions: list[str] | None = None,
     open_questions: list[str] | None = None,
     files_touched: list[str] | None = None,
+    node_id: str | None = None,
 ) -> dict:
     safe_id = _sanitize_session_id(session_id)
     existing = read_handoff(safe_id)
-    step = {"role": role, "task": task, "ts": int(time.time())}
+    step: dict = {"role": role, "task": task, "ts": int(time.time())}
+    if node_id is not None:
+        step["node_id"] = node_id
+        step["decisions"] = list(decisions or [])
+        step["open_questions"] = list(open_questions or [])
+        step["files_touched"] = list(files_touched or [])
     updated = {
         "session_id": safe_id,
         "last_updated": int(time.time()),

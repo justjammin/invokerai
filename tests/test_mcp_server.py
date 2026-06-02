@@ -18,6 +18,9 @@ from agent_invoker.mcp_server import (
     confirm_route,
     list_agents,
     decompose_task,
+    get_handoff,
+    put_handoff,
+    persona_for_role,
     get_project_context,
     _agent_resources,
     _read_agent_resource,
@@ -62,7 +65,7 @@ class TestServerInfo:
                 tools = await client.list_tools()
                 return {t.name for t in tools}
         names = _run(_t())
-        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome", "get_handoff", "put_handoff", "get_project_context"}
+        assert names == {"route_task", "spawn_specialist", "confirm_route", "list_agents", "decompose_task", "log_outcome", "get_handoff", "put_handoff", "get_project_context", "persona_for_role"}
 
     def test_resources_list(self):
         resources = _agent_resources()
@@ -284,6 +287,14 @@ class TestDecomposeTask:
         for field in ("pattern", "steps", "domain_roles"):
             assert field in result
 
+    def test_bead_graph_present_with_nodes(self):
+        result = decompose_task(
+            task="build backend, frontend, migrate db",
+            domains=["backend", "frontend", "database"],
+        )
+        assert "bead_graph" in result
+        assert "nodes" in result["bead_graph"]
+
     def test_explicit_domains_structure(self):
         result = decompose_task(
             task="build an API with tests",
@@ -426,3 +437,191 @@ def test_get_project_context_empty():
     result = get_project_context("nonexistent-project-xyz")
     assert result["project_id"] == "nonexistent-project-xyz"
     assert result["frequent_roles"] == []
+
+
+# ---------------------------------------------------------------------------
+# 10. write_handoff node_id tagging (A2)
+# ---------------------------------------------------------------------------
+
+class TestWriteHandoffNodeId:
+    def test_with_node_id_step_carries_per_step_lists(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        write_handoff(
+            "nid-session",
+            "backend-developer",
+            "build api",
+            decisions=["use REST"],
+            open_questions=["auth method?"],
+            files_touched=["api.py"],
+            node_id="s2",
+        )
+        result = read_handoff("nid-session")
+        step = result["steps_completed"][0]
+        assert step["node_id"] == "s2"
+        assert step["decisions"] == ["use REST"]
+        assert step["open_questions"] == ["auth method?"]
+        assert step["files_touched"] == ["api.py"]
+
+    def test_with_node_id_flat_top_level_still_cumulative(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        write_handoff("nid2-session", "backend-developer", "step1", decisions=["d1"], node_id="s1")
+        write_handoff("nid2-session", "frontend-developer", "step2", decisions=["d2"], node_id="s2")
+        result = read_handoff("nid2-session")
+        assert "d1" in result["decisions"]
+        assert "d2" in result["decisions"]
+        assert len(result["steps_completed"]) == 2
+
+    def test_without_node_id_step_shape_unchanged(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        write_handoff("legacy-session", "backend-developer", "build api", decisions=["use REST"])
+        result = read_handoff("legacy-session")
+        step = result["steps_completed"][0]
+        assert "node_id" not in step
+        assert "decisions" not in step
+        assert step["role"] == "backend-developer"
+        assert step["task"] == "build api"
+        assert "ts" in step
+
+    def test_without_node_id_flat_cumulative_still_works(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        write_handoff("legacy2-session", "backend-developer", "step1", decisions=["d1"])
+        write_handoff("legacy2-session", "frontend-developer", "step2", decisions=["d2"])
+        result = read_handoff("legacy2-session")
+        assert result["decisions"] == ["d1", "d2"]
+
+
+# ---------------------------------------------------------------------------
+# 11. read_handoff deps filtering (A3)
+# ---------------------------------------------------------------------------
+
+class TestReadHandoffDepsFilter:
+    def test_deps_filter_returns_only_matching_nodes(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        write_handoff("deps-session", "backend-developer", "step s2", decisions=["s2-decision"], node_id="s2")
+        write_handoff("deps-session", "frontend-developer", "step s3", decisions=["s3-decision"], node_id="s3")
+
+        scoped = read_handoff("deps-session", deps=["s2"])
+        assert len(scoped["steps_completed"]) == 1
+        assert scoped["steps_completed"][0]["node_id"] == "s2"
+        assert scoped["decisions"] == ["s2-decision"]
+        assert "s3-decision" not in scoped["decisions"]
+
+    def test_deps_none_returns_full_cumulative(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        write_handoff("full-session", "backend-developer", "step s2", decisions=["s2-d"], node_id="s2")
+        write_handoff("full-session", "frontend-developer", "step s3", decisions=["s3-d"], node_id="s3")
+
+        full = read_handoff("full-session", deps=None)
+        assert len(full["steps_completed"]) == 2
+        assert "s2-d" in full["decisions"]
+        assert "s3-d" in full["decisions"]
+
+    def test_deps_empty_list_returns_full_cumulative(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        write_handoff("empty-deps-session", "backend-developer", "step s2", decisions=["d1"], node_id="s2")
+        full = read_handoff("empty-deps-session", deps=[])
+        assert len(full["steps_completed"]) == 1
+        assert "d1" in full["decisions"]
+
+    def test_deps_filter_legacy_steps_without_node_id_excluded(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        # Legacy step (no node_id) should not appear when filtering by node_id
+        write_handoff("mixed-session", "backend-developer", "legacy step", decisions=["legacy-d"])
+        write_handoff("mixed-session", "frontend-developer", "tagged step", decisions=["tagged-d"], node_id="s2")
+
+        scoped = read_handoff("mixed-session", deps=["s2"])
+        assert len(scoped["steps_completed"]) == 1
+        assert scoped["decisions"] == ["tagged-d"]
+
+    def test_deps_union_across_multiple_matching_nodes(self, tmp_path, monkeypatch):
+        import agent_invoker.sessions as sessions_mod
+        monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+        from agent_invoker.sessions import write_handoff, read_handoff
+
+        write_handoff("union-session", "backend-developer", "s2", decisions=["s2-d"], files_touched=["api.py"], node_id="s2")
+        write_handoff("union-session", "frontend-developer", "s3", decisions=["s3-d"], files_touched=["ui.tsx"], node_id="s3")
+        write_handoff("union-session", "database-engineer", "s4", decisions=["s4-d"], node_id="s4")
+
+        scoped = read_handoff("union-session", deps=["s2", "s3"])
+        assert set(scoped["decisions"]) == {"s2-d", "s3-d"}
+        assert set(scoped["files_touched"]) == {"api.py", "ui.tsx"}
+        assert len(scoped["steps_completed"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# 12. prior_handoff regression — spawn_specialist still gets it (A3 no-deps path)
+# ---------------------------------------------------------------------------
+
+def test_prior_handoff_still_injected_after_put_handoff(tmp_path, monkeypatch):
+    import agent_invoker.sessions as sessions_mod
+    monkeypatch.setattr(sessions_mod, "_HANDOFF_DIR", tmp_path)
+    from agent_invoker.sessions import write_handoff
+
+    sid = "prior-regression-session"
+    write_handoff(sid, "backend-developer", "completed step", decisions=["use postgres"])
+
+    result = spawn_specialist(task="fix the null pointer crash in auth.py", session_id=sid)
+    assert "prior_handoff" in result
+    assert "use postgres" in result["prior_handoff"].get("decisions", [])
+
+
+# ---------------------------------------------------------------------------
+# 13. persona_for_role (A4)
+# ---------------------------------------------------------------------------
+
+class TestPersonaForRole:
+    def test_known_role_returns_system_prompt_fragment(self):
+        result = persona_for_role(role="backend-developer")
+        assert "system_prompt_fragment" in result
+
+    def test_fragment_is_composed_not_raw_frontmatter(self):
+        from agent_invoker.domains import _CAVEMAN_PREFIX
+        result = persona_for_role(role="backend-developer")
+        fragment = result["system_prompt_fragment"]
+        assert fragment.startswith(_CAVEMAN_PREFIX), (
+            f"Expected composed prefix, got: {fragment[:80]!r}"
+        )
+
+    def test_fragment_does_not_start_with_frontmatter(self):
+        result = persona_for_role(role="backend-developer")
+        fragment = result["system_prompt_fragment"]
+        assert not fragment.startswith("---\nname:"), (
+            "Got raw frontmatter instead of composed fragment"
+        )
+
+    def test_resource_uri_present(self):
+        result = persona_for_role(role="backend-developer")
+        assert result["resource_uri"] == "agent://backend-developer"
+
+    def test_unknown_role_returns_uri_only(self):
+        result = persona_for_role(role="nonexistent-role-xyz-abc")
+        assert result["resource_uri"] == "agent://nonexistent-role-xyz-abc"
+        assert "system_prompt_fragment" not in result
+
+    def test_task_param_accepted(self):
+        result = persona_for_role(role="backend-developer", task="build a REST API")
+        assert "resource_uri" in result
