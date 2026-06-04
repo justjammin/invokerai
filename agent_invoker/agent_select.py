@@ -142,8 +142,12 @@ def resolve_plan(
 
         if domain:
             agent_name = _resolve_domain(domain)
+        elif stage1_role and stage1_role in agent_map.get("domains", {}):
+            # Novel domain not in fixed _ROLE_DOMAIN but present as a bucket in the map —
+            # route through it directly without a coverage gap.
+            agent_name = _resolve_domain(stage1_role)
         else:
-            # Role not in _ROLE_DOMAIN — emit fallback + gap
+            # Role not in _ROLE_DOMAIN and not a map bucket — emit fallback + gap
             coverage_gaps.append({"domain": stage1_role or "unknown", "fallback": _FALLBACK_AGENT})
             agent_name = _FALLBACK_AGENT
 
@@ -168,13 +172,16 @@ def resolve_plan(
             if domain not in seen_domains:
                 seen_domains.append(domain)
             agent_name = _resolve_domain(domain)
+        elif step_role in agent_map.get("domains", {}):
+            # Novel domain not in fixed _ROLE_DOMAIN but present as a bucket in the map —
+            # route through it directly without a coverage gap.
+            if step_role not in seen_domains:
+                seen_domains.append(step_role)
+            agent_name = _resolve_domain(step_role)
         else:
-            # Role not in _ROLE_DOMAIN (e.g. "integration-engineer", "api-designer",
-            # "code-simplifier") — resolve by trying the role name directly as a
-            # domain key, then fall back to general-purpose.
-            #
-            # These are meta-roles that don't have a canonical domain; if the user
-            # has an agent installed whose NAME matches the role, prefer it.
+            # Role not in _ROLE_DOMAIN and not a map bucket — resolve by trying the
+            # role name directly as an installed-agent name, then fall back.
+            # (Handles meta-roles: "integration-engineer", "api-designer", etc.)
             map_names = {
                 e["name"]
                 for bucket in agent_map.get("domains", {}).values()

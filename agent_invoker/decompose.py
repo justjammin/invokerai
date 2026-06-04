@@ -208,7 +208,7 @@ def _generate_steps_v2(domains: list[str], task: str, complexity: str = "medium"
 
     is_parallel = len(ordered) >= 3
     for domain in ordered:
-        role = _EXPLICIT_DOMAIN_ROLE.get(domain, "backend-developer")
+        role = _EXPLICIT_DOMAIN_ROLE.get(domain, domain)
         label = _ROLE_LABELS.get(role, domain)
         steps.append({"step": step_num, "role": role, "action": f"Implement {label}", "parallel": is_parallel})
         step_num += 1
