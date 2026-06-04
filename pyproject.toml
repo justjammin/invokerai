@@ -22,7 +22,6 @@ classifiers = [
 ]
 dependencies = [
     "scikit-learn>=1.4",
-    "fastmcp>=0.9",
     "psutil>=5.9",
 ]
 
@@ -42,7 +41,6 @@ dev = [
 
 [project.scripts]
 invoker = "agent_invoker.cli:main"
-invoker-mcp = "agent_invoker.mcp_server:serve"
 
 [project.urls]
 Homepage = "https://github.com/justjammin/invokerai"

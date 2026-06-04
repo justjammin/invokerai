@@ -1,4 +1,4 @@
-"""Tests for inject_agents_md() in setup_editors.py."""
+"""Tests for inject_agents_md() and injection-surface content in setup_editors.py."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,6 +9,9 @@ from agent_invoker.setup_editors import (
     AGENTS_MD_MARKER_END,
     AGENTS_MD_MARKER_START,
     AGENTS_MD_NODE,
+    _INVOKERAI_NODE_BODY,
+    _PROMPT_HOOK_COMMAND,
+    _SUBAGENT_HOOK_COMMAND,
     inject_agents_md,
 )
 
@@ -68,3 +71,42 @@ def test_inject_agents_md_creates_parent_dir(tmp_path: Path) -> None:
     result = inject_agents_md(agents_md)
     assert result is True
     assert agents_md.exists()
+
+
+# ---------------------------------------------------------------------------
+# Injection surface content: MCP-free, invoker-spawn present
+# ---------------------------------------------------------------------------
+
+MCP_SYMBOLS = ["mcp__invokerai__spawn_specialist", "mcp__invokerai__confirm_route", "spawn_specialist"]
+
+
+class TestInjectionSurfaceContent:
+    def test_node_body_references_invoker_spawn(self):
+        assert "invoker spawn" in _INVOKERAI_NODE_BODY
+
+    def test_node_body_has_no_mcp_symbols(self):
+        for sym in MCP_SYMBOLS:
+            assert sym not in _INVOKERAI_NODE_BODY, f"Found MCP symbol in node body: {sym}"
+
+    def test_prompt_hook_references_invoker_spawn(self):
+        assert "invoker spawn" in _PROMPT_HOOK_COMMAND
+
+    def test_prompt_hook_has_no_mcp_symbols(self):
+        for sym in MCP_SYMBOLS:
+            assert sym not in _PROMPT_HOOK_COMMAND, f"Found MCP symbol in prompt hook: {sym}"
+
+    def test_subagent_hook_references_invoker_spawn(self):
+        assert "invoker spawn" in _SUBAGENT_HOOK_COMMAND
+
+    def test_subagent_hook_has_no_mcp_symbols(self):
+        for sym in MCP_SYMBOLS:
+            assert sym not in _SUBAGENT_HOOK_COMMAND, f"Found MCP symbol in subagent hook: {sym}"
+
+    def test_node_body_skill_never_spawns(self):
+        # Skill plans; host spawns — not the other way around.
+        assert "Spawn the returned agents yourself" in _INVOKERAI_NODE_BODY
+
+    def test_node_body_bd_optional(self):
+        # bd/beads mentioned only as optional
+        assert "Optional" in _INVOKERAI_NODE_BODY
+        assert "bd" in _INVOKERAI_NODE_BODY

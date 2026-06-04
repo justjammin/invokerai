@@ -1,6 +1,6 @@
 """
-Auto-configure InvokerAI MCP server for Claude Code, Cursor, and GitHub Copilot.
-Also injects the InvokerAI CLAUDE.md node into ~/.claude/CLAUDE.md.
+Configure InvokerAI hooks for Claude Code and inject the InvokerAI node into
+~/.claude/CLAUDE.md and ~/.agents/AGENTS.md.
 
 Usage:
     python -m agent_invoker.setup_editors
@@ -9,10 +9,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 
 INVOKERAI_MARKER_START = "<!-- INVOKERAI-START -->"
@@ -27,34 +24,49 @@ AGENTS_MD_MARKER_END = INVOKERAI_MARKER_END
 _INVOKERAI_NODE_BODY = """\
 ## InvokerAI — Agent Router
 
-**BLOCKING REQUIREMENT:** NEVER call the `Agent` tool directly and NEVER do coding tasks directly. Always use
-`mcp__invokerai__spawn_specialist(task, domains=[...])` — it routes AND returns the execution bundle.
-If MCP is unavailable: `invoker spawn "TASK" --domains d1,d2` from terminal returns the same bundle and writes the spawn token.
+**YOUR ROLE: orchestrator/planner ONLY.** Never write code. Never implement directly.
+Before any multi-step or multi-domain task: decompose into domains, run `invoker spawn`, then
+spawn the returned installed agents yourself using your own Agent tool in step order.
 
-**ROLE: orchestrator/planner ONLY.** Never write code. Never read files for implementation purposes.
-Only: plan, decompose, identify domains, call spawn_specialist.
+**Operating contract (host agent):**
+
+1. **Identify domains** for the task (1–N from the list below).
+2. **Run `invoker spawn`** to get the lean execution plan:
+   ```
+   invoker spawn "TASK" --domains d1,d2
+   ```
+   Returns: `{routing, agent|steps, pattern, domains, spawn_authorized, session_id}`
+   - `routing == "solo"` → one agent name in `agent`
+   - `routing == "crew"` → ordered steps in `steps[]`, each with `agent`, `action`, `parallel`
+3. **Spawn the returned agents yourself** via your own Agent tool, respecting step order and
+   `parallel: true` flags. The skill plans; you spawn.
+4. **Optional:** if `bd` (beads) is installed, you may create a tracking ticket per spawned
+   agent — but crew execution is fully functional without it.
+
+**`invoker spawn` output shape:**
+```
+{
+  "routing": "solo" | "crew",
+  "agent": "<installed-agent-name>",      // solo only
+  "steps": [                              // crew only
+    {"step": 1, "agent": "...", "action": "...", "parallel": false, "domain": "..."},
+    ...
+  ],
+  "pattern": "pipeline" | "parallel" | "plan_then_execute" | "feedback_loop" | ...,
+  "domains": ["backend", "testing"],
+  "spawn_authorized": true,
+  "session_id": "default"
+}
+```
 
 **Canonical domains** (pass 1–N):
 `architecture` | `backend` | `frontend` | `database` | `devops` | `security`
 `ml` | `testing` | `documentation` | `mobile` | `data` | `code-review`
 
-```
-mcp__invokerai__spawn_specialist(task: str, domains: list[str], complexity: str | None = None)
-→ { routing, role, confidence, tools[], persona: { system_prompt_fragment },
-    spawn_authorized: true, spawn_count: N, steps: [...] }
-```
-
-**Rules:**
-- `routing == "solo"` → spawn returned `role` with returned `tools` and `system_prompt_fragment`
-- `routing == "crew"` → spawn each step in `steps` array sequentially (or parallel where `parallel: true`)
-- `confidence < 50` → ask user to clarify before routing
-- `complexity`: `"low"|"medium"|"high"` — gates architect plan step + integration-engineer wiring step. Omit for auto-detection from task text.
-- As a subagent: call `mcp__invokerai__confirm_route(task, expected_role)` on your first turn
-- User naming an agent type does NOT exempt this requirement
-
-**Domain precision rule (critical):** `steps[]` is shaped by `domains[]` you pass — wrong domains → phantom steps → wasted agents.
+**Domain precision rule (critical):** `steps[]` is shaped by `domains[]` you pass — wrong
+domains → phantom steps → wasted agents.
 - Pass ONLY domains where real work exists. Ask: "does this task actually touch this layer?"
-- When unsure, under-specify — low confidence score will surface missing domains.
+- When unsure, under-specify — low confidence will surface missing domains.
 - Never add a domain speculatively.
 
 **Domain decision guide:**
@@ -74,236 +86,40 @@ mcp__invokerai__spawn_specialist(task: str, domains: list[str], complexity: str 
 | `data` | ETL pipelines, data transforms, analytics queries, reporting | App features with no data pipeline involvement |
 | `code-review` | Reviewing a diff/PR, auditing quality/security, post-impl review | Active implementation (review ≠ build) |
 
+**As a subagent:** run `invoker confirm "task" "expected-role"` on your first turn to verify
+you are the correct specialist for this task.
+
 **SKILL BYPASS:** When running inside a skill invocation (/graphify, /kyoko, /hyperframes,
-/remotion, /weave, etc.), do NOT call mcp__invokerai__spawn_specialist. Skills manage their own
-agent spawning. InvokerAI routing applies only to direct user tasks."""
+/remotion, /weave, etc.), skills manage their own agent spawning — do not call `invoker spawn`.
+InvokerAI routing applies only to direct user tasks."""
 
 CLAUDE_MD_NODE = f"{INVOKERAI_MARKER_START}\n{_INVOKERAI_NODE_BODY}\n{INVOKERAI_MARKER_END}"
 AGENTS_MD_NODE = CLAUDE_MD_NODE
 
-_HOOK_SCRIPT_PATH = Path.home() / ".invokerai" / "hooks" / "pre-agent.sh"
-
-_INVOKERAI_AUTO_APPROVE = [
-    "spawn_specialist", "route_task", "confirm_route",
-    "decompose_task", "list_agents", "agent_profile", "route",
-]
-
-_HOOK_SCRIPT = r"""#!/bin/bash
-# InvokerAI PreToolUse[Agent] hook — spawn token gate (multi-count)
-# Allows Agent calls authorized by spawn_specialist; blocks all others.
-
-VENV_PY="$HOME/.invokerai/venv/bin/python"
-TOKEN="$HOME/.invokerai/spawn_token"
-TOKEN_TTL=30
-
-# Token gate: spawn_specialist wrote this token — allow and decrement count
-if [ -f "$TOKEN" ]; then
-    TOKEN_CONTENT=$(cat "$TOKEN" 2>/dev/null)
-
-    # Support both legacy format (timestamp only) and new format (count:timestamp)
-    if [[ "$TOKEN_CONTENT" =~ ^([0-9]+):([0-9]+)$ ]]; then
-        TOKEN_COUNT="${BASH_REMATCH[1]}"
-        TOKEN_TS="${BASH_REMATCH[2]}"
-    elif [[ "$TOKEN_CONTENT" =~ ^[0-9]+$ ]]; then
-        TOKEN_COUNT=1
-        TOKEN_TS="$TOKEN_CONTENT"
-    else
-        TOKEN_COUNT=0
-        TOKEN_TS=0
-    fi
-
-    if [ "$TOKEN_COUNT" -gt 0 ]; then
-        TOKEN_AGE=$(( $(date +%s) - TOKEN_TS ))
-        if [ "$TOKEN_AGE" -lt "$TOKEN_TTL" ]; then
-            # Decrement or remove
-            if [ "$TOKEN_COUNT" -gt 1 ]; then
-                echo "$(( TOKEN_COUNT - 1 )):$TOKEN_TS" > "$TOKEN"
-            else
-                rm -f "$TOKEN"
-            fi
-            exit 0
-        fi
-    fi
-    rm -f "$TOKEN"
-fi
-
-# No valid token — block with guidance
-TASK=$(echo "${CLAUDE_TOOL_INPUT:-{}}" | "$VENV_PY" -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get('description') or d.get('task') or d.get('prompt') or '')
-except Exception:
-    print('')
-" 2>/dev/null)
-
-if [ -n "$TASK" ] && [ -x "$VENV_PY" ]; then
-    ROUTE_JSON=$("$VENV_PY" -m agent_invoker.cli --no-log "$TASK" 2>/dev/null)
-    ROLE=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('role','unknown'))" 2>/dev/null)
-    CONF=$(echo "$ROUTE_JSON" | "$VENV_PY" -c "import sys,json; print(json.load(sys.stdin).get('confidence',0))" 2>/dev/null)
-    "$VENV_PY" -c "import json,sys; r,c=sys.argv[1],sys.argv[2]; print(json.dumps({'hookSpecificOutput':{'additionalContext':f'InvokerAI pre-resolved: role={r} confidence={c}%. Call mcp__invokerai__spawn_specialist(task, domains=[...]) — writes spawn token + returns execution bundle.','permissionDecision':'deny','permissionDecisionReason':'Call mcp__invokerai__spawn_specialist first.'}}))" "$ROLE" "$CONF"
-else
-    echo '{"hookSpecificOutput":{"additionalContext":"InvokerAI: call mcp__invokerai__spawn_specialist(task, domains=[...]) — routes, writes spawn token, returns execution bundle.","permissionDecision":"deny","permissionDecisionReason":"Call mcp__invokerai__spawn_specialist first."}}'
-fi
-exit 1
-"""
-
-
-def _homebrew_bin() -> Path | None:
-    """Find invoker-mcp installed via Homebrew (absolute path, immune to PATH changes)."""
-    for prefix in ["/opt/homebrew", "/usr/local", "/home/linuxbrew/.linuxbrew"]:
-        p = Path(prefix) / "bin" / "invoker-mcp"
-        if p.exists():
-            return p
-    try:
-        result = subprocess.run(
-            ["brew", "--prefix"], capture_output=True, text=True, timeout=3
-        )
-        if result.returncode == 0:
-            p = Path(result.stdout.strip()) / "bin" / "invoker-mcp"
-            if p.exists():
-                return p
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    return None
-
-
-def _npm_bin() -> Path | None:
-    """Find invoker-mcp across nvm / fnm / volta / system npm global bins."""
-    # nvm — search all installed node versions, newest first
-    nvm_dir = Path(os.environ.get("NVM_DIR", Path.home() / ".nvm"))
-    if nvm_dir.exists():
-        node_versions = sorted(
-            (nvm_dir / "versions" / "node").glob("v*"), reverse=True
-        )
-        for node_dir in node_versions:
-            candidate = node_dir / "bin" / "invoker-mcp"
-            if candidate.exists():
-                return candidate
-
-    # fnm
-    fnm_dir = Path.home() / ".fnm" / "node-versions"
-    if fnm_dir.exists():
-        for node_dir in sorted(fnm_dir.glob("v*"), reverse=True):
-            candidate = node_dir / "installation" / "bin" / "invoker-mcp"
-            if candidate.exists():
-                return candidate
-
-    # volta
-    volta_bin = Path.home() / ".volta" / "bin" / "invoker-mcp"
-    if volta_bin.exists():
-        return volta_bin
-
-    # system npm global
-    try:
-        result = subprocess.run(
-            ["npm", "root", "-g"], capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0:
-            candidate = Path(result.stdout.strip()).parent / "bin" / "invoker-mcp"
-            if candidate.exists():
-                return candidate
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    return None
-
-
-def _venv_python() -> Path | None:
-    """~/.invokerai/venv/bin/python — always has agent_invoker installed."""
-    IS_WIN = sys.platform == "win32"
-    p = Path.home() / ".invokerai" / "venv" / ("Scripts" if IS_WIN else "bin") / ("python.exe" if IS_WIN else "python")
-    return p if p.exists() else None
-
-
-def _mcp_entry(pkg_dir: Path) -> dict:
-    # managed venv — immune to PATH/version changes, always has agent_invoker
-    venv_py = _venv_python()
-    if venv_py:
-        return {"command": "/bin/bash", "args": ["-c", "$HOME/.invokerai/venv/bin/python -m agent_invoker.mcp_server"]}
-
-    brew_bin = _homebrew_bin()
-    if brew_bin:
-        return {"command": str(brew_bin)}
-
-    npm_bin = _npm_bin()
-    if npm_bin:
-        return {"command": str(npm_bin)}
-
-    # last resort — sys.executable may be the wrong interpreter
-    py = sys.executable
-    print(f"  Warning: ~/.invokerai/venv not found. Using {py} — run installer to fix.")
-    try:
-        subprocess.run([py, "-c", "import agent_invoker"], check=True, capture_output=True)
-        return {"command": "/bin/bash", "args": ["-c", "$HOME/.invokerai/venv/bin/python -m agent_invoker.mcp_server"]}
-    except subprocess.CalledProcessError:
-        return {"command": "/bin/bash", "args": ["-c", "$HOME/.invokerai/venv/bin/python -m agent_invoker.mcp_server"]}
-
-
-def _clear_pycache(pkg_dir: Path) -> None:
-    import os
-    for root, dirs, files in os.walk(pkg_dir / "agent_invoker"):
-        if "__pycache__" in dirs:
-            cache = Path(root) / "__pycache__"
-            for f in cache.glob("*.pyc"):
-                f.unlink(missing_ok=True)
-
-
-_AGENT_HOOK_COMMAND = f'bash "{_HOOK_SCRIPT_PATH}"'
-_AGENT_HOOK_MATCHER = "Agent"
-_AGENT_HOOK_MARKER = str(_HOOK_SCRIPT_PATH)
 
 _SUBAGENT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SubagentStart\",\"additionalContext\":"
-    "\"InvokerAI: call mcp__invokerai__confirm_route(task, expected_role) on first turn — verify correct specialist. "
+    "\"InvokerAI: run invoker confirm \\\\\\\"task\\\\\\\" \\\\\\\"expected-role\\\\\\\" on first turn — verify correct specialist. "
     "ROLE: orchestrator/planner ONLY. Never write code. Never implement directly. "
     "Identify 1+ domains from: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
-    "Call mcp__invokerai__spawn_specialist(task, domains=[...]) — returns execution bundle + spawns specialist+reviewer. "
-    "MCP unavailable? Run: invoker spawn \\\"TASK\\\" --domains d1,d2 from terminal — same bundle, same token. "
+    "Run: invoker spawn \\\\\\\"TASK\\\\\\\" --domains d1,d2 → returns installed agent names + MAS pattern + ordered steps. "
+    "Then spawn those agents yourself via your own Agent tool in step order. Skill plans; host spawns. "
     "CAVEMAN MODE ULTRA: drop articles/filler/hedging/pleasantries. Fragments OK. Short synonyms. "
     "Abbreviate (DB/auth/config/req/res/fn/impl). Arrows for causality (X->Y). One word when one word enough. "
     "Code blocks unchanged. Technical terms exact.\"}}'"
 )
 _SUBAGENT_HOOK_MARKER = "InvokerAI"
+_SUBAGENT_HOOK_CURRENT_MARKER = "hookEventName"
 
 _PROMPT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":"
-    "\"InvokerAI: route agent tasks via mcp__invokerai__spawn_specialist(task, domains=[...]). "
-    "Identify domains first: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
-    "Never spawn Agent directly. Never do coding tasks directly — only plan and orchestrate. "
-    "MCP unavailable? Use: invoker spawn \\\"TASK\\\" --domains d1,d2 from terminal.\"}}'"
+    "\"InvokerAI: before any task, decompose into domains, run invoker spawn \\\\\\\"TASK\\\\\\\" --domains d1,d2 for the plan, "
+    "then spawn the returned installed agents yourself in order. "
+    "Domains: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
+    "Never do coding tasks directly — only plan and orchestrate.\"}}'"
 )
 _PROMPT_HOOK_MARKER = "InvokerAI"
-_PROMPT_HOOK_CURRENT_MARKER = "mcp__invokerai__spawn_specialist"
-
-
-def _install_hook_script() -> bool:
-    _HOOK_SCRIPT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _HOOK_SCRIPT_PATH.write_text(_HOOK_SCRIPT)
-    _HOOK_SCRIPT_PATH.chmod(0o755)
-    print(f"  Hook script: installed → {_HOOK_SCRIPT_PATH}")
-    return True
-
-
-def _inject_agent_hook(settings: dict) -> bool:
-    """Add PreToolUse[Agent] hook — B+C hybrid with spawn token gate."""
-    hooks = settings.setdefault("hooks", {})
-    pre = hooks.setdefault("PreToolUse", [])
-
-    for entry in pre:
-        if entry.get("matcher") == _AGENT_HOOK_MATCHER:
-            for h in entry.get("hooks", []):
-                if _AGENT_HOOK_MARKER in h.get("command", ""):
-                    return False  # already present
-
-    pre.append({
-        "matcher": _AGENT_HOOK_MATCHER,
-        "hooks": [{"type": "command", "command": _AGENT_HOOK_COMMAND}],
-    })
-    return True
-
-
-_SUBAGENT_HOOK_CURRENT_MARKER = "hookEventName"
+_PROMPT_HOOK_CURRENT_MARKER = "returned installed agents"
 
 
 def _inject_subagent_hook(settings: dict) -> bool:
@@ -371,7 +187,7 @@ def _inject_prompt_hook(settings: dict) -> bool:
                     new_inner.append(h)
                     found_current = True
                 else:
-                    changed = True  # stale — missing hookEventName or outdated content
+                    changed = True  # stale — outdated content
             else:
                 new_inner.append(h)
         if new_inner:
@@ -392,37 +208,13 @@ def _inject_prompt_hook(settings: dict) -> bool:
 
 
 def setup_claude_code(pkg_dir: Path) -> bool:
-    # MCP servers → ~/.claude.json (Claude Code's primary config)
-    # Hooks → ~/.claude/settings.json (user settings layer)
-    claude_json_path = Path.home() / ".claude.json"
+    """Inject SubagentStart + UserPromptSubmit hooks into ~/.claude/settings.json."""
     settings_path = Path.home() / ".claude" / "settings.json"
 
     if not settings_path.parent.exists():
         print("  Claude Code: not installed, skipping")
         return False
 
-    # Register MCP in ~/.claude.json
-    claude_json: dict = {}
-    if claude_json_path.exists():
-        try:
-            claude_json = json.loads(claude_json_path.read_text())
-        except json.JSONDecodeError:
-            claude_json = {}
-
-    mcp_changed = False
-    claude_json.setdefault("mcpServers", {})
-    new_entry = {**_mcp_entry(pkg_dir), "autoApprove": _INVOKERAI_AUTO_APPROVE}
-    if claude_json["mcpServers"].get("invokerai") == new_entry:
-        print("  Claude Code: MCP already up to date (skipped)")
-    else:
-        claude_json["mcpServers"]["invokerai"] = new_entry
-        mcp_changed = True
-        print("  Claude Code: MCP registered → ~/.claude.json")
-
-    if mcp_changed:
-        claude_json_path.write_text(json.dumps(claude_json, indent=2) + "\n")
-
-    # Register hooks in ~/.claude/settings.json
     settings: dict = {}
     if settings_path.exists():
         try:
@@ -431,12 +223,6 @@ def setup_claude_code(pkg_dir: Path) -> bool:
             settings = {}
 
     hooks_changed = False
-
-    if _inject_agent_hook(settings):
-        hooks_changed = True
-        print("  Claude Code: Agent hook registered → ~/.claude/settings.json")
-    else:
-        print("  Claude Code: Agent hook already registered (skipped)")
 
     if _inject_subagent_hook(settings):
         hooks_changed = True
@@ -452,139 +238,6 @@ def setup_claude_code(pkg_dir: Path) -> bool:
 
     if hooks_changed:
         settings_path.write_text(json.dumps(settings, indent=2) + "\n")
-
-    return True
-
-
-def _cursor_installed() -> bool:
-    IS_WIN = sys.platform == "win32"
-    IS_MAC = sys.platform == "darwin"
-    candidates = []
-    if IS_MAC:
-        candidates = [Path("/Applications/Cursor.app"), Path.home() / "Applications" / "Cursor.app"]
-    elif IS_WIN:
-        candidates = [
-            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Cursor" / "Cursor.exe",
-            Path(os.environ.get("PROGRAMFILES", "")) / "Cursor" / "Cursor.exe",
-        ]
-    else:
-        candidates = [Path("/usr/bin/cursor"), Path("/usr/local/bin/cursor"), Path.home() / ".local" / "bin" / "cursor"]
-    return any(p.exists() for p in candidates)
-
-
-def setup_cursor(pkg_dir: Path) -> bool:
-    cursor_mcp = Path.home() / ".cursor" / "mcp.json"
-    if not cursor_mcp.parent.exists():
-        if not _cursor_installed():
-            print("  Cursor: not installed, skipping")
-            return False
-        cursor_mcp.parent.mkdir(parents=True, exist_ok=True)
-
-    config: dict = {"mcpServers": {}}
-    if cursor_mcp.exists():
-        try:
-            config = json.loads(cursor_mcp.read_text())
-        except json.JSONDecodeError:
-            config = {"mcpServers": {}}
-
-    if "mcpServers" not in config:
-        config["mcpServers"] = {}
-
-    if "invokerai" in config["mcpServers"]:
-        print("  Cursor: MCP already registered (skipped)")
-    else:
-        config["mcpServers"]["invokerai"] = _mcp_entry(pkg_dir)
-        cursor_mcp.write_text(json.dumps(config, indent=2) + "\n")
-        print("  Cursor: MCP registered → ~/.cursor/mcp.json")
-
-    return True
-
-
-def setup_kiro(pkg_dir: Path) -> bool:
-    kiro_agents_dir = Path.home() / ".kiro" / "agents"
-    if not kiro_agents_dir.parent.exists():
-        print("  Kiro: not installed, skipping")
-        return False
-
-    kiro_agents_dir.mkdir(parents=True, exist_ok=True)
-    agent_file = kiro_agents_dir / "invokerai.json"
-
-    entry = _mcp_entry(pkg_dir)
-    config: dict = {
-        "name": "invokerai",
-        "description": "Agent routing brain — route tasks to optimal specialist via MCP",
-        "mcpServers": {},
-        "hooks": {},
-    }
-    if agent_file.exists():
-        try:
-            config = json.loads(agent_file.read_text())
-        except json.JSONDecodeError:
-            pass
-
-    changed = False
-
-    config.setdefault("mcpServers", {})
-    if "invokerai" in config["mcpServers"]:
-        print("  Kiro: MCP already registered (skipped)")
-    else:
-        config["mcpServers"]["invokerai"] = entry
-        changed = True
-        print("  Kiro: MCP registered → ~/.kiro/agents/invokerai.json")
-
-    config.setdefault("hooks", {})
-    hooks = config["hooks"]
-
-    kiro_agent_hook = f'bash "{_HOOK_SCRIPT_PATH}"'
-    if hooks.get("agentSpawn", {}).get("command") != kiro_agent_hook:
-        hooks["agentSpawn"] = {"command": kiro_agent_hook}
-        changed = True
-        print("  Kiro: agentSpawn hook registered → ~/.kiro/agents/invokerai.json")
-    else:
-        print("  Kiro: agentSpawn hook already registered (skipped)")
-
-    if _PROMPT_HOOK_MARKER not in hooks.get("userPromptSubmit", {}).get("command", ""):
-        hooks["userPromptSubmit"] = {"command": _PROMPT_HOOK_COMMAND}
-        changed = True
-        print("  Kiro: userPromptSubmit hook registered → ~/.kiro/agents/invokerai.json")
-    else:
-        print("  Kiro: userPromptSubmit hook already registered (skipped)")
-
-    if changed:
-        agent_file.write_text(json.dumps(config, indent=2) + "\n")
-
-    return True
-
-
-def setup_copilot(pkg_dir: Path) -> bool:
-    # Project-local — only if a workspace root exists
-    cwd_mcp = Path.cwd() / ".github" / "copilot" / "mcp.json"
-    if not (Path.cwd() / ".github").exists():
-        print("  GitHub Copilot: no .github/ in cwd, skipping")
-        return False
-
-    cwd_mcp.parent.mkdir(parents=True, exist_ok=True)
-    config: dict = {"servers": {}}
-    if cwd_mcp.exists():
-        try:
-            config = json.loads(cwd_mcp.read_text())
-        except json.JSONDecodeError:
-            config = {"servers": {}}
-
-    if "servers" not in config:
-        config["servers"] = {}
-
-    if "invokerai" in config["servers"]:
-        print("  GitHub Copilot: MCP already registered (skipped)")
-    else:
-        entry = _mcp_entry(pkg_dir)
-        server_entry: dict = {"command": entry["command"], "type": "stdio"}
-        args = entry.get("args", [])
-        if args:
-            server_entry["args"] = args
-        config["servers"]["invokerai"] = server_entry
-        cwd_mcp.write_text(json.dumps(config, indent=2) + "\n")
-        print(f"  GitHub Copilot: MCP registered → {cwd_mcp}")
 
     return True
 
@@ -665,21 +318,15 @@ def run(pkg_dir: Path | None = None) -> None:
     if pkg_dir is None:
         pkg_dir = Path(__file__).parent.parent
 
-    _clear_pycache(pkg_dir)
-    _install_hook_script()
     print("Configuring InvokerAI for editors...")
     print()
     setup_claude_code(pkg_dir)
-    setup_cursor(pkg_dir)
-    setup_kiro(pkg_dir)
-    setup_copilot(pkg_dir)
     inject_claude_md()
     inject_agents_md()
     copy_skill(pkg_dir)
     print()
-    print("Done. Restart Claude Code / Cursor / Kiro to activate.")
-    print("CLI-first: `invoker spawn \"TASK\" --domains d1,d2 --complexity low|medium|high` (preferred)")
-    print("  or MCP: mcp__invokerai__spawn_specialist(task, domains=[...], complexity=None)")
+    print("Done. Restart Claude Code to activate.")
+    print("Usage: invoker spawn \"TASK\" --domains d1,d2")
     print("To remove: `invoker uninstall`")
 
 
@@ -721,36 +368,12 @@ def uninstall(purge: bool = False) -> None:
         else:
             print("  AGENTS.md: block not found (skipped)")
 
-    # ── ~/.claude.json MCP entry ──────────────────────────────────────────────
-    claude_json_path = Path.home() / ".claude.json"
-    if claude_json_path.exists():
-        try:
-            data = json.loads(claude_json_path.read_text())
-            if data.get("mcpServers", {}).pop("invokerai", None) is not None:
-                claude_json_path.write_text(json.dumps(data, indent=2) + "\n")
-                print("  ~/.claude.json: MCP entry removed")
-            else:
-                print("  ~/.claude.json: entry not found (skipped)")
-        except (json.JSONDecodeError, OSError):
-            print("  ~/.claude.json: could not parse (skipped)")
-
     # ── ~/.claude/settings.json hooks ────────────────────────────────────────
     settings_path = Path.home() / ".claude" / "settings.json"
     if settings_path.exists():
         try:
             settings = json.loads(settings_path.read_text())
             changed = False
-
-            # PreToolUse[Agent] — remove entries referencing hook script
-            pre = settings.get("hooks", {}).get("PreToolUse", [])
-            new_pre = [
-                e for e in pre
-                if not any(_AGENT_HOOK_MARKER in h.get("command", "") for h in e.get("hooks", []))
-            ]
-            if len(new_pre) != len(pre):
-                settings["hooks"]["PreToolUse"] = new_pre
-                changed = True
-                print("  settings.json: Agent hook removed")
 
             # SubagentStart — remove InvokerAI entries
             sub = settings.get("hooks", {}).get("SubagentStart", [])
@@ -780,36 +403,6 @@ def uninstall(purge: bool = False) -> None:
                 print("  settings.json: no InvokerAI hooks found (skipped)")
         except (json.JSONDecodeError, OSError):
             print("  settings.json: could not parse (skipped)")
-
-    # ── ~/.cursor/mcp.json ────────────────────────────────────────────────────
-    cursor_mcp = Path.home() / ".cursor" / "mcp.json"
-    if cursor_mcp.exists():
-        try:
-            data = json.loads(cursor_mcp.read_text())
-            if data.get("mcpServers", {}).pop("invokerai", None) is not None:
-                cursor_mcp.write_text(json.dumps(data, indent=2) + "\n")
-                print("  ~/.cursor/mcp.json: entry removed")
-            else:
-                print("  ~/.cursor/mcp.json: entry not found (skipped)")
-        except (json.JSONDecodeError, OSError):
-            print("  ~/.cursor/mcp.json: could not parse (skipped)")
-
-    # ── ~/.kiro/agents/invokerai.json ─────────────────────────────────────────
-    kiro_file = Path.home() / ".kiro" / "agents" / "invokerai.json"
-    if kiro_file.exists():
-        kiro_file.unlink()
-        print("  ~/.kiro/agents/invokerai.json: removed")
-
-    # ── .github/copilot/mcp.json (cwd) ───────────────────────────────────────
-    copilot_mcp = Path.cwd() / ".github" / "copilot" / "mcp.json"
-    if copilot_mcp.exists():
-        try:
-            data = json.loads(copilot_mcp.read_text())
-            if data.get("servers", {}).pop("invokerai", None) is not None:
-                copilot_mcp.write_text(json.dumps(data, indent=2) + "\n")
-                print(f"  {copilot_mcp}: entry removed")
-        except (json.JSONDecodeError, OSError):
-            pass
 
     # ── ~/.invokerai/ (optional purge) ────────────────────────────────────────
     invokerai_dir = Path.home() / ".invokerai"

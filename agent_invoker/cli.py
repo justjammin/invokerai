@@ -13,7 +13,7 @@ MAX_TASK_LEN = 4096
 def main() -> None:
     # Peek at argv to decide: subcommand dispatch or bare task routing
     argv = sys.argv[1:]
-    known_commands = {"route", "tools", "setup", "migrate", "mcp", "train", "spawn", "confirm", "uninstall", "decompose", "stop", "update", "agents", "log-outcome", "why"}
+    known_commands = {"route", "tools", "setup", "migrate", "train", "spawn", "confirm", "uninstall", "decompose", "update", "agents", "log-outcome", "why"}
 
     if argv and argv[0] in known_commands:
         _dispatch_subcommand(argv)
@@ -231,33 +231,6 @@ def _handle_decompose(argv: list[str]) -> None:
     }, indent=2))
 
 
-# ── stop — kill orphaned invoker-mcp processes ───────────────────────────────
-
-def _handle_stop(_argv: list[str]) -> None:
-    import psutil
-
-    killed: list[int] = []
-    for proc in psutil.process_iter(["pid", "cmdline", "name"]):
-        try:
-            cmdline = proc.info["cmdline"] or []
-            name = proc.info["name"] or ""
-            is_invoker = (
-                any("agent_invoker.mcp_server" in part for part in cmdline)
-                or "invoker-mcp" in name
-            )
-            if not is_invoker:
-                continue
-            if not psutil.pid_exists(proc.ppid()):
-                proc.kill()
-                killed.append(proc.pid)
-                print(f"Killed orphan PID {proc.pid}")
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
-
-    if not killed:
-        print("No orphaned invoker-mcp processes found")
-
-
 # ── update — reinstall package, rebuild router, run migration ─────────────────
 
 def _handle_update(_argv: list[str]) -> None:
@@ -404,9 +377,6 @@ def _dispatch_subcommand(argv: list[str]) -> None:
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         mod.run()
-    elif command == "mcp":
-        from agent_invoker.mcp_server import serve
-        serve()
     elif command == "train":
         _handle_train(rest)
     elif command == "route":
@@ -419,8 +389,6 @@ def _dispatch_subcommand(argv: list[str]) -> None:
         _handle_uninstall(rest)
     elif command == "decompose":
         _handle_decompose(rest)
-    elif command == "stop":
-        _handle_stop(rest)
     elif command == "update":
         _handle_update(rest)
     elif command == "agents":
@@ -533,12 +501,11 @@ def _print_help() -> None:
   invoker why "task text" --json                   Same, machine-readable JSON
   invoker log-outcome DATE PREFIX CORRECTIONS ACCEPTED  Append outcome metrics to session log
 
-  invoker setup                                    Configure MCP + hooks for Claude Code, Cursor, Kiro, Copilot
-  invoker uninstall                                Remove all InvokerAI config (hooks, MCP entries, CLAUDE.md block)
+  invoker setup                                    Inject hooks for Claude Code + update CLAUDE.md/AGENTS.md
+  invoker uninstall                                Remove all InvokerAI config (hooks, CLAUDE.md block)
   invoker uninstall --purge                        Also delete ~/.invokerai/ (venv, logs, tokens)
-  invoker migrate                                  Upgrade existing setup (purge old hooks, new token gate)
+  invoker migrate                                  Upgrade existing setup (purge old hooks)
   invoker update                                   Reinstall package, rebuild router, run migration
-  invoker mcp                                      Start MCP server (stdio)
 
   invoker tools add --all TOOL [TOOL...]           Add tools to all agents
   invoker tools add --category NAME TOOL [TOOL...] Add to category
@@ -547,9 +514,7 @@ def _print_help() -> None:
   invoker train --phase 2                          Build Phase 2 router (requires 200+ log entries)
 
   invoker tools remove --all TOOL [TOOL...]        Remove tools
-  invoker tools list AGENT_ID                      List tools for agent
-
-  invoker stop                                     Kill orphaned invoker-mcp processes (parent dead)""")
+  invoker tools list AGENT_ID                      List tools for agent""")
 
 
 if __name__ == "__main__":

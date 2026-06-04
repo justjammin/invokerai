@@ -5,7 +5,7 @@ from pathlib import Path
 @pytest.fixture(autouse=True)
 def clean_spawn_token(tmp_path):
     """Remove spawn token before each test to avoid cross-test contamination."""
-    from agent_invoker.mcp_server import _SPAWN_TOKEN
+    from agent_invoker.cli import _SPAWN_TOKEN
     _SPAWN_TOKEN.unlink(missing_ok=True)
     yield
     _SPAWN_TOKEN.unlink(missing_ok=True)
