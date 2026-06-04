@@ -4,34 +4,21 @@
 
 # InvokerAI
 
-**InvokerAI is the conductor that enforces route-first discipline.** It sits between your task and your coding agent — Claude Code, Cursor, Kiro, or Copilot — and routes work to the right specialist context instead of letting your agent YOLO everything in one generic context window.
+**InvokerAI routes tasks to specialist agents.** It sits between your task and your coding agent—Claude Code, Cursor, Kiro, or Copilot—and decomposes work into the right specialists instead of letting one generic context window thrash across multiple domains.
 
-Drop a real task: "refactor the payment gateway, add the Stripe webhook, and migrate the orders table to Postgres 16." Without routing, your agent thrashes between backend, database, and infrastructure all at once. Output works. Doesn't feel great.
+Instead of asking a single agent to "refactor the payment gateway, add Stripe webhooks, and migrate to Postgres 16" all at once, InvokerAI splits the work: a backend specialist handles the gateway, a database specialist handles the migration, and a devops engineer handles the infrastructure. Each gets only the context they need.
 
-With InvokerAI, you get a backend specialist for the gateway work, a database specialist for the migration, and a cloud engineer for the infrastructure. Each one gets only the context they need. Cleaner reasoning. Fewer hallucinations. Actual specialist work instead of generalist noise.
+## What You Get
 
-**How it actually works:**
+**The Skill** — `invoker spawn` in-editor. Scans your installed agents, builds a routing map, routes tasks, returns execution plans.
 
-- **Local ML router** — TF-IDF + KNN by default (zero downloads, ships ready). Upgrades to bge-large embeddings + RandomForest once you hit 200 logged decisions. All local. No API keys. No cloud calls. Auditable via `invoker why "task"`.
-- **Three-tier persona composition** — role selection walks domain rules → subdomain patterns → framework specifics, collapsing into one prompt fragment capped at 6000 tokens. A FastAPI task pulls all three tiers. A generic backend task pulls one or two. Tighter match, deeper context.
-- **Hard-block enforcement on Claude Code / Kiro** — PreToolUse + SubagentStart hooks gate the Agent call behind a spawn token issued by the router. No valid token, the call is denied at the platform layer. Real block, not advisory. Cursor / GitHub Copilot use soft enforcement via CLAUDE.md guidance (no hooks available), but routing is still active and agents that follow the protocol get routed correctly.
-- **Private, observable infrastructure** — Routing happens on your machine. Your decisions log to `~/.invokerai/routing_log.jsonl`. Confidence gating (70+ spawns clean, 50–69 shows runners-up, below 50 refuses). Phase 2 retraining uses only your own data. No telemetry. No external calls.
-
-84 specialist personas in the default registry. Custom registries override on collision. Confidence gates the spawn: high confidence ships clean, low confidence returns candidates and asks for clarification before anything runs.
-
-No cloud. No API keys. No config file editing. Runs entirely on your machine.
-
-Extracted from [LENA](https://github.com/justjammin/lena), the AI orchestrator I've been running on Claude Code. After using this routing logic daily it deserved its own thing.
+**The SDK** — A Python library. Call `orchestrate(task, domains)` → get back a fully-resolved, topologically-ordered plan. No spawning, no execution—you bring your own runtime (Claude Agent SDK, CrewAI, LangGraph, etc.) and call the agents yourself.
 
 ---
 
 ## Install
 
-Requires Python 3.10+. Check yours first if anything fails:
-
-```bash
-python --version
-```
+Requires Python 3.10+.
 
 ```bash
 git clone https://github.com/justjammin/invokerai
@@ -39,7 +26,7 @@ cd invokerai
 python install.py
 ```
 
-The installer creates a venv at `~/.invokerai/venv`. Activate it so the `invoker` command is on your PATH:
+The installer creates a venv at `~/.invokerai/venv`. Activate it:
 
 ```bash
 source ~/.invokerai/venv/bin/activate
@@ -47,7 +34,9 @@ source ~/.invokerai/venv/bin/activate
 
 ---
 
-## One command. Then you're done.
+## The Skill
+
+### One command. Everything wires itself.
 
 After install, run this once:
 
@@ -55,236 +44,470 @@ After install, run this once:
 invoker setup
 ```
 
-InvokerAI scans what you have installed and wires everything up:
+This does two things:
 
-- **Claude Code** — MCP server registered, PreToolUse / SubagentStart / UserPromptSubmit hooks installed, routing rule injected into `~/.claude/CLAUDE.md`
-- **Cursor** — MCP server registered in `~/.cursor/mcp.json`
-- **Kiro** — MCP + `agentSpawn` / `userPromptSubmit` hooks in `~/.kiro/agents/invokerai.json`
-- **GitHub Copilot** — MCP server registered in `.github/copilot/mcp.json`
+1. **Scans installed agents** — InvokerAI walks `~/.claude/agents/` (and other editor locations) and builds `~/.invokerai/agent-map.json`, a `domain → [installed agents]` mapping. The scan is idempotent and additive: re-running adds new agents, never clobbers.
 
-No config file to edit. No hook to write. Restart your editor. Routing is live.
+2. **Injects routing protocol** — Adds a routing reminder to `~/.claude/CLAUDE.md` (and `~/.agents/AGENTS.md` if present), telling the host agent: before any multi-domain task → run `invoker spawn` to get the plan → then spawn those agents yourself using your Agent tool.
 
----
-
-## What happens next
-
-Nothing you have to do. That's the thing.
-
-You type your task. Your agent identifies the relevant domains, calls `mcp__invokerai__spawn_specialist`, and hands execution to the right specialist. All before any code gets written. You just get a backend engineer when you need one.
-
-For "refactor the payment gateway to async/await", InvokerAI returns the specialist with that context. The confidence-aware gate handles everything below 70: warning at 50-69, ask the user to clarify below 50.
-
----
-
-## What spawn_specialist actually does
-
-No seriously: when Claude calls `mcp__invokerai__spawn_specialist(task, domains=[...])`, it isn't getting a label back. It's getting a fully constructed specialist identity.
-
-Here's what fires under the hood:
+### How it works
 
 ```
-spawn_specialist("build a FastAPI endpoint with Pydantic validation", domains=["backend"])
-        │
-        ▼
-1. Router scores the task — deterministic signals first (sentence shape, imperative verbs, domain
-   hits, file refs) + keyword triggers pick the role → "backend-developer", confidence = 87.
-   On low-confidence tasks (< 70) an optional local ML classifier runs as a tie-breaker and is
-   adopted only when it beats the heuristic. (Phase 1: TF-IDF + KNN, zero downloads.)
-        │
-        ▼
-2. Tier-tree walk — _load_persona("backend-developer")
-        │
-        ├── agents/backend.md          ← Tier 1: universal backend rules
-        │   HTTP verbs, status codes, RBAC, structured logging, connection pooling...
-        │
-        ├── agents/backend/python.md   ← Tier 2: Python-specific patterns
-        │   Type hints, Pydantic v2, asyncio, dependency injection...
-        │
-        └── agents/backend/python/fastapi.md  ← Tier 3: FastAPI deep specialist
-            Routers, Depends(), background tasks, OpenAPI conventions...
-        │
-        ▼
-3. Fragments composed → system_prompt_fragment (capped 6000 tok)
-        │
-        ▼
-4. Bundle returned:
-   {
-     role: "backend-developer",
-     confidence: 87,
-     routing: "solo",
-     tools: ["Read", "Write", "Edit", "Bash", ...],
-     persona: {
-       resource_uri: "agent://backend-developer",
-       system_prompt_fragment: "# Roleplay Notes\n- HTTP verbs: GET read-only..."
-     }
-   }
+Task: "build a REST API with auth and tests"
+         │
+         ▼
+  invoker spawn "..." --domains backend,security,testing
+         │
+         ├─ Identify domains (you specify or it infers)
+         │
+         ├─ Route: classify the task → pick specialist roles
+         │
+         ├─ Resolve roles → installed agent names from agent-map
+         │
+         ├─ Decompose: detect MAS pattern (pipeline, parallel, etc.)
+         │
+         └─ Return plan: fully-resolved, ordered steps
+         │
+         ▼
+  Host agent spawns returned agents in order via its own Agent tool
+  (Skill plans. Host spawns. Skill never spawns.)
 ```
 
-The spawned agent doesn't get a name. It gets a composed behavioral contract, stacked from domain rules, subdomain patterns, and specialist depth, all assembled for this exact task. Three tiers collapse into one prompt fragment the agent runs as.
+### Primary surface
 
-The tighter the match, the deeper the stack. A FastAPI task pulls all three tiers. A generic backend task pulls one or two. Task context shapes the specialist in real time, without any manual agent selection.
+```bash
+invoker spawn "build a REST API with auth and tests" --domains backend,security,testing
+```
 
----
+Returns:
 
-## Multi-agent tasks
+```json
+{
+  "routing": "crew",
+  "pattern": "pipeline",
+  "spawn_authorized": true,
+  "steps": [
+    {
+      "step": 1,
+      "agent": "architect-reviewer",
+      "action": "Create implementation plan",
+      "parallel": false,
+      "domain": "architecture"
+    },
+    {
+      "step": 2,
+      "agent": "backend-developer",
+      "action": "Implement API layer",
+      "parallel": false,
+      "domain": "backend"
+    },
+    {
+      "step": 3,
+      "agent": "code-reviewer",
+      "action": "Security review",
+      "parallel": false,
+      "domain": "security"
+    },
+    {
+      "step": 4,
+      "agent": "test-automator",
+      "action": "Implement test suite",
+      "parallel": false,
+      "domain": "testing"
+    }
+  ],
+  "domains": ["backend", "security", "testing"],
+  "session_id": "default"
+}
+```
 
-When a task spans multiple domains, InvokerAI hands Claude a structured decomposition instead of free-text guidance. Six patterns, detected from the task text, no config required:
+The host agent then spawns each agent from `steps[]` in order, respecting `parallel: true` flags (parallel-safe steps can run simultaneously).
+
+### Canonical domains
+
+15 domains. Pick only those where real work exists:
+
+| Domain | Add when... | Skip when... |
+|--------|-------------|--------------|
+| `architecture` | New subsystem design, cross-cutting redesign, impl path needs codebase context, "how should we structure X?" | Bug fix, additive feature with clear scope, path is obvious |
+| `backend` | Server routes, REST/GraphQL APIs, IPC handlers, business logic, auth middleware | Pure UI work, DB-only schema changes with no server code |
+| `frontend` | UI components, styling, client-side state, browser events, rendering | Server-only work, no user-facing changes |
+| `database` | Schema changes, migrations, query optimization, indexes, ORM models | No DB reads/writes in task |
+| `devops` | CI/CD pipelines, Dockerfiles, infra config, deploy scripts, env vars | App code changes only |
+| `security` | Auth flows, permissions, secrets handling, input validation, CVE fixes | Feature work with no trust boundary changes |
+| `ml` | Model training, inference, embeddings, prompt engineering, vector search | Standard CRUD with no ML components |
+| `testing` | Writing/fixing tests, test infra, coverage gaps, flaky test diagnosis | Impl work where tests are a side effect |
+| `documentation` | API docs, READMEs, changelogs, docstrings, user guides | Code-only changes with no public surface |
+| `mobile` | iOS/Android native code, React Native, Flutter, mobile-specific APIs | Web-only work |
+| `data` | ETL pipelines, data transforms, analytics queries, reporting | App features with no data pipeline involvement |
+| `code-review` | Reviewing a diff/PR, auditing quality/security, post-impl review | Active implementation (review ≠ build) |
+| `marketing` | Campaign strategy, content, SEO, audience funnel, paid search, ad spend, ROAS, bid strategy | Feature development with no marketing component |
+| `business` | Stakeholder requirements, competitive analysis, roadmapping, KPIs, OKRs, prioritization, ROI | Technical implementation with no business strategy |
+| `research` | Literature review, investigation, data synthesis, findings documentation, comparative analysis | Standard feature work with no research depth |
+
+### Routing patterns
+
+InvokerAI detects multi-agent patterns automatically. No config required:
 
 | Pattern | When | Structure |
-|---|---|---|
-| `pipeline` | Sequential domains, default | Ordered steps, each a different specialist |
+|---------|------|-----------|
+| `pipeline` | Sequential domains (default) | Ordered steps, each a different specialist |
 | `parallel` | "simultaneously", "concurrently" | Steps marked `parallel: true`, integration at end |
 | `supervisor` | "manage", "coordinate", "oversee agents" | Planner → workers → reviewer |
 | `feedback_loop` | "review and revise", "iterate until" | Generator → critic → revise (3-step loop) |
 | `plan_then_execute` | "design first then", "plan then build" | Architect step first, execution follows |
 | `hierarchical` | Full-stack + enterprise/platform keywords | Top supervisor → domain leads → integration |
 
-Curious what Claude gets handed for a complex task? Peek at it:
+### Routing confidence
+
+Confidence gates the route:
+
+- **70+** — High confidence, clean route
+- **50–69** — Medium confidence, returns runner-up roles alongside primary
+- **< 50** — Low confidence, asks for clarification before spawning
+
+Check routing decisions:
 
 ```bash
-invoker decompose "build the react frontend, implement the api, migrate postgres, deploy to k8s"
+invoker why "refactor payment gateway to async"
 ```
 
-```json
-  "domain_roles": [
-    { "domain": "frontend", "role": "frontend-developer" },
-    { "domain": "backend",  "role": "backend-developer"  },
-    { "domain": "database", "role": "database-optimizer" },
-    { "domain": "devops",   "role": "cloud-architect"    }
-  ]
+```
+Role:       backend-developer
+Confidence: 87%  (deterministic)
+Routing:    solo
+
+Why:
+  Matches: "refactor" (verb), "async" (keyword)
+  Category: coding (priority 5)
+
+Runner-ups:
+  refactoring-specialist
+  fullstack-developer
+
+To override: invoker spawn "refactor payment gateway to async" --domains backend
 ```
 
-Right shape, right roles, right execution order. `parallel: true` flags what can fire simultaneously. Claude reads this and orchestrates from there.
-
----
-
-## How enforcement actually works
-
-This is worth understanding. This is where the fun starts.
-
-```
-User submits prompt
-        │
-        ▼
-UserPromptSubmit hook ─── injects routing reminder into context
-        │
-        ▼
-Claude calls `mcp__invokerai__spawn_specialist(task, domains=[...])` before doing anything
-        │
-        ▼
-PreToolUse[Agent] → ~/.invokerai/hooks/pre-agent.sh
-        │
-        ├── spawn_token exists + age < 30s?
-        │         YES → consume token, exit 0 (Agent call goes through)
-        │
-        └── NO valid token
-                  │
-                  ├── CLI available? → pre-resolve route, inject into context
-                  │
-                  └── hookSpecificOutput: permissionDecision: deny
-                            Agent call is blocked. Hard.
-        │
-        ▼
-SubagentStart hook ──── spawned agent runs:
-                        `mcp__invokerai__confirm_route(task, expected_role)` on first turn
-                        Self-corrects if the classifier disagrees.
-```
-
-`permissionDecision: deny` is a real platform block. The Agent call doesn't happen. There's no workaround. That's the whole point.
-
-**Kiro:** Same token pattern via `agentSpawn` + `userPromptSubmit` hooks.
-
-**Cursor / GitHub Copilot:** No hook system. Routing is enforced via CLAUDE.md guidance: agents that follow it call `spawn_specialist` and get routed correctly. No platform-level block exists; an agent that ignores the rule can bypass routing silently.
-
----
-
-## Supported editors
-
-| Editor | MCP | Hooks | Config file |
-|--------|-----|-------|-------------|
-| Claude Code | Yes | PreToolUse, SubagentStart, UserPromptSubmit | `~/.claude.json`, `~/.claude/settings.json` |
-| Cursor | Yes | None | `~/.cursor/mcp.json` |
-| Kiro | Yes | agentSpawn, userPromptSubmit | `~/.kiro/agents/invokerai.json` |
-| GitHub Copilot | Yes | None | `.github/copilot/mcp.json` |
-
----
-
-## CLI reference
-
-### Setup and management
-
-Commands you run directly:
-
-```
-invoker setup                                Configure MCP + hooks for all detected editors
-invoker migrate                              Upgrade v0.1.0 setup
-invoker update                               Reinstall editable, rebuild router, run migration
-invoker uninstall                            Remove all InvokerAI config
-invoker uninstall --purge                    Also delete ~/.invokerai/ (venv, logs, tokens)
-invoker --model-info                         Show router phase + status
-invoker mcp                                  Start MCP server on stdio (editors handle this)
-invoker train                                Build Phase 1 router from labeled examples
-invoker train --phase 2                      Build Phase 2 router (needs 200+ log entries)
-
-invoker tools add --all TOOL [TOOL...]           Add tools to all agents
-invoker tools add --category NAME TOOL [TOOL...] Add to a category
-invoker tools add --agents ID,ID TOOL [TOOL...]  Add to specific agents
-invoker tools remove --all TOOL [TOOL...]         Remove tools
-invoker tools list AGENT_ID                       List tools for an agent
-```
-
-### Routing commands
-
-These are for debugging — see exactly what the router returns:
-
-```
-invoker "task text"                          Route only (no token)
-invoker --registry PATH "task text"          Use custom agent registry
-invoker --no-log "task text"                 Skip logging
-invoker decompose "task"                     MAS pattern + skeleton steps
-invoker why "task text"                      Explain why a role was picked (trigger, confidence, runner-ups)
-invoker why "task text" --json               Same, machine-readable JSON
-invoker spawn "task" --dry-run               Preview role + persona + steps without committing
-invoker spawn "task" --project-id myrepo     Track role usage per project
-```
-
-Primary surface for Agent/MCP: `mcp__invokerai__spawn_specialist(task, domains=[...])`
-
-If MCP is unavailable (Cursor agent mode, Codex, or any harness where MCP args can't be passed), use the CLI equivalent from terminal. Returns the same bundle and writes the spawn token:
+### CLI reference (Skill)
 
 ```bash
-invoker spawn "TASK" --domains d1,d2
+# Get execution plan — primary surface
+invoker spawn "task" --domains d1,d2
+
+# Preview only, don't commit token
+invoker spawn "task" --dry-run
+
+# Track usage per project (auto-derived from cwd if omitted)
+invoker spawn "task" --project-id myrepo
+
+# Persist under named session
+invoker spawn "task" --session-id my-session
+
+# Explain routing decision
+invoker why "task text"
+invoker why "task text" --json
+
+# Subagent self-check — verify the routed specialist matches the task
+invoker confirm "task" "expected-role"
+
+# Build agent map from installed agents
+invoker setup
+
+# List all available specialists
+invoker agents
+invoker agents --category backend
+
+# Decompose pattern + steps only (no agent resolution)
+invoker decompose "task"
+
+# Route-only (no token, no spawn)
+invoker "task text"
+invoker --registry PATH "task text"
+invoker --no-log "task text"
+invoker --model-info
+
+# Uninstall routing
+invoker uninstall
+invoker uninstall --purge                    # Also delete ~/.invokerai/
+
+# Update package and rebuild router
+invoker update
+
+# Add tools to agents
+invoker tools add --all TOOL [TOOL...]           # All agents
+invoker tools add --category NAME TOOL [TOOL...] # By category
+invoker tools add --agents ID,ID TOOL [TOOL...]  # By agent
+invoker tools list AGENT_ID                      # List tools for agent
+
+# Build router (required for Phase 2)
+invoker train                                # Phase 1: TF-IDF + kNN
+invoker train --phase 2                      # Phase 2: embeddings + RandomForest
+
+# Patch session outcome metrics
+invoker log-outcome DATE PREFIX CORRECTIONS ACCEPTED
+```
+
+---
+
+## The SDK
+
+### Python library—pure orchestration, no execution.
+
+InvokerAI is available as an importable SDK. It returns plans and agent definitions; executes nothing. You bring the runtime and auth.
+
+```bash
+pip install agent-invoker
+```
+
+The SDK core has **zero heavy dependencies**. It imports `decompose`, `load_agent_map`, `resolve_plan`, `compose_agent_definition`, `topological_order`, `parallel_groups`, `orchestrate` at the package root.
+
+### Public API
+
+| Function | Purpose | Returns |
+|----------|---------|---------|
+| `decompose(task, domains, complexity)` | Detect MAS pattern + skeleton steps + bead graph | `DecomposeResult` |
+| `load_agent_map(map_path)` | Load agent-map from disk | `dict \| None` |
+| `resolve_plan(task, plan, agent_map)` | Map roles → installed agent names | `dict` |
+| `compose_agent_definition(node, task)` | Build plain-dict agent definition from node | `dict` |
+| `topological_order(bead_graph)` | Order bead-graph nodes into dependency levels | `list[list[str]]` |
+| `parallel_groups(bead_graph)` | Same as `topological_order` (alias for clarity) | `list[list[str]]` |
+| `orchestrate(task, domains, agent_map, map_path)` | One-call full plan (decompose → resolve → compose → order) | `dict` |
+
+### No side effects
+
+- No network calls
+- No spawning
+- No token writes
+- No file modifications
+- Pure computation: task in → plan out
+
+### Example: Claude Agent SDK
+
+```python
+import asyncio
+from anthropic import Anthropic
+from agent_invoker import orchestrate
+
+client = Anthropic()
+
+async def run_orchestration(task: str, domains: list[str]):
+    """Get plan from InvokerAI, execute with Claude Agent SDK."""
+    
+    # Step 1: Get full plan from InvokerAI (zero execution)
+    plan = orchestrate(task, domains=domains)
+    
+    print(f"Pattern: {plan['pattern']}")
+    print(f"Levels: {len(plan['levels'])}")
+    
+    # Step 2: Execute topologically-ordered levels
+    for level_idx, level in enumerate(plan['levels']):
+        print(f"\nLevel {level_idx + 1} ({len(level)} agents):")
+        
+        # Run all agents in this level concurrently (they're dependency-independent)
+        tasks = [
+            client.agents.execute(
+                agent_id=node["agent"],
+                # compose_agent_definition already in node["prompt"]
+                system_prompt=node["prompt"],
+                tools=node["tools"],
+                input=task,
+            )
+            for node in level
+        ]
+        
+        results = await asyncio.gather(*tasks)
+        
+        for node, result in zip(level, results):
+            print(f"  {node['agent']}: {result.get('status', 'done')}")
+    
+    return plan
+
+# Run it
+asyncio.run(run_orchestration(
+    "build a FastAPI endpoint with Pydantic validation and tests",
+    domains=["backend", "testing"]
+))
+```
+
+### Example: CrewAI
+
+```python
+from crewai import Agent, Task, Crew
+from agent_invoker import orchestrate
+
+def run_with_crewai(task: str, domains: list[str]):
+    """Get plan from InvokerAI, execute with CrewAI."""
+    
+    # Step 1: Orchestrate (returns fully-resolved, ordered plan)
+    plan = orchestrate(task, domains=domains)
+    
+    # Step 2: Map levels to CrewAI agents + tasks
+    all_agents = []
+    all_tasks = []
+    
+    for level_idx, level in enumerate(plan['levels']):
+        level_agents = []
+        level_tasks = []
+        
+        for node in level:
+            # node keys: node_id, agent, prompt, tools, model, deps, annotation
+            agent = Agent(
+                role=node['agent'],
+                goal=node['annotation'] or f"Execute {node['agent']}",
+                backstory=node['prompt'],  # Composed system prompt
+                tools=[...],  # Map node['tools'] to CrewAI tool objects
+                model=node['model'],
+            )
+            level_agents.append(agent)
+            
+            task = Task(
+                description=task,
+                expected_output=f"Completed: {node['annotation']}",
+                agent=agent,
+                dependencies=[all_tasks[i] for i in node['deps']] if node['deps'] else [],
+            )
+            level_tasks.append(task)
+        
+        all_agents.extend(level_agents)
+        all_tasks.extend(level_tasks)
+    
+    # Step 3: Create crew and execute
+    crew = Crew(agents=all_agents, tasks=all_tasks)
+    result = crew.kickoff(inputs={"task": task})
+    
+    return result
+
+# Run it
+run_with_crewai(
+    "build a FastAPI endpoint with Pydantic validation and tests",
+    domains=["backend", "testing"]
+)
+```
+
+### Example: LangChain / LangGraph
+
+```python
+from langgraph.graph import StateGraph
+from agent_invoker import orchestrate, topological_order
+
+def run_with_langgraph(task: str, domains: list[str]):
+    """Get plan from InvokerAI, execute with LangGraph."""
+    
+    # Step 1: Orchestrate (returns fully-resolved plan + bead_graph)
+    plan = orchestrate(task, domains=domains)
+    
+    # Step 2: Build LangGraph from topological levels
+    graph = StateGraph(state_schema={"output": str, "task": str})
+    
+    # Step 3: Add nodes (one per agent)
+    for level in plan['levels']:
+        for node in level:
+            # node keys: node_id, agent, prompt, tools, model, deps, annotation
+            graph.add_node(
+                node['node_id'],
+                # Your runnable function that calls the agent
+                create_agent_runnable(
+                    name=node['agent'],
+                    system_prompt=node['prompt'],
+                    tools=node['tools'],
+                    model=node['model'],
+                ),
+            )
+    
+    # Step 4: Wire edges based on dependencies
+    for level in plan['levels']:
+        for node in level:
+            if node['deps']:
+                # Depends on prior nodes
+                for dep_id in node['deps']:
+                    graph.add_edge(dep_id, node['node_id'])
+            else:
+                # No dependencies → starts at start
+                graph.add_edge("__start__", node['node_id'])
+    
+    # Step 5: Execute
+    compiled = graph.compile()
+    result = compiled.invoke({"task": task})
+    
+    return result
+
+def create_agent_runnable(name, system_prompt, tools, model):
+    """Build a runnable agent with the composed prompt."""
+    # Your implementation: call Claude or another model
+    # with system_prompt as the system context
+    pass
+
+# Run it
+run_with_langgraph(
+    "build a FastAPI endpoint with Pydantic validation and tests",
+    domains=["backend", "testing"]
+)
+```
+
+### Orchestrate result shape
+
+```python
+{
+    "pattern": "pipeline",           # or: parallel, supervisor, feedback_loop, plan_then_execute, hierarchical
+    "levels": [                      # Topologically ordered
+        [
+            {
+                "node_id": "s1",
+                "agent": "architect-reviewer",
+                "prompt": "# System prompt (composed from persona files)",
+                "tools": ["Read", "Write", "Bash"],
+                "model": "claude-opus-4-1",
+                "deps": [],
+                "annotation": "Create implementation plan",
+            },
+            ...
+        ],
+        [
+            {
+                "node_id": "s2",
+                "agent": "backend-developer",
+                "prompt": "...",
+                "tools": [...],
+                "model": "...",
+                "deps": ["s1"],
+                "annotation": "Implement API layer",
+            },
+            ...
+        ],
+    ],
+    "coverage_gaps": [],             # Domains with no installed agent (fallback used)
+}
 ```
 
 ---
 
 ## The routing model
 
-InvokerAI ships in two phases. Phase 1 works out of the box. Phase 2 gets smarter the more you use it.
+InvokerAI uses two phases. Phase 1 ships out of the box. Phase 2 gets smarter as you log decisions.
 
 | Phase | Model | What it needs |
-|-------|-------|----------------|
-| 1 (default) | TF-IDF + KNeighborsClassifier | Nothing. Ships working, no downloads |
-| 2 | `BAAI/bge-large-en-v1.5` + RandomForestClassifier | 200+ logged decisions + one ~1.3 GB download |
+|-------|-------|---------------|
+| **1 (default)** | TF-IDF + KNeighborsClassifier | Nothing—ships working, zero downloads |
+| **2** | BGE large embeddings + RandomForestClassifier | 200+ logged decisions + one ~1.3 GB download |
 
-Every routing decision logs to `~/.invokerai/routing_log.jsonl`. Hit 200 entries and want the accuracy bump?
+Every routing decision logs to `~/.invokerai/routing_log.jsonl`. Once you hit 200 entries, upgrade:
 
 ```bash
 pip install agent-invoker[embeddings]
 python scripts/build_router.py --phase 2
 ```
 
-Downloads once to `~/.cache/huggingface/`, runs fully local after that. No API calls. Everything stays on your machine.
+Downloads once to `~/.cache/huggingface/`, runs fully local after. No API calls. Everything stays on your machine.
 
 ---
 
 ## Custom agents
 
-84+ agents in the default registry. Add your own: custom agents override defaults on `id` collision.
+The default registry ships with 80+ specialist agents. Override on collision:
 
 ```bash
 invoker --registry ./my-agents.json "task text"
-invoker --registry ./agents/ "task text"        # loads every *.json in the directory
+invoker --registry ./agents/ "task text"        # Loads every *.json in dir
 ```
 
 Registry format:
