@@ -10,13 +10,31 @@ Instead of asking a single agent to "refactor the payment gateway, add Stripe we
 
 ## What You Get
 
-**The Skill** — `invoker spawn` in-editor. Scans your installed agents, builds a routing map, routes tasks, returns execution plans.
+**The Skill** — Agent skill installed via `npx invokerai-skills` (primary) or `invoker setup` (CLI). Runs as sub-skills (setup → decompose → spawn), each PROSE the main agent executes. Plans work; you spawn the agents via your own Agent tool.
 
 **The SDK** — A Python library. Call `orchestrate(task, domains)` → get back a fully-resolved, topologically-ordered plan. No spawning, no execution—you bring your own runtime (Claude Agent SDK, CrewAI, LangGraph, etc.) and call the agents yourself.
 
 ---
 
 ## Install
+
+### Primary: Skill (npm)
+
+Requires Node 18+. Install the skill package:
+
+```bash
+npm install -g invokerai-skills
+```
+
+or scoped to your project:
+
+```bash
+npm install invokerai-skills --save-dev
+```
+
+This copies the skill (router + 3 sub-skills) to `~/.claude/skills/invokerai` and is ready to use in-editor immediately.
+
+### Alternative: CLI + SDK (Python)
 
 Requires Python 3.10+.
 
@@ -32,23 +50,27 @@ The installer creates a venv at `~/.invokerai/venv`. Activate it:
 source ~/.invokerai/venv/bin/activate
 ```
 
+The Python path also installs the CLI (`invoker …` commands) and SDK (`import agent_invoker`). Run `invoker setup` once to build the agent map.
+
 ---
 
 ## The Skill
 
-### One command. Everything wires itself.
+### Three sub-skills working together
 
-After install, run this once:
+The skill is installed as a router + three sub-skills, each executed by the main agent as PROSE:
 
-```bash
-invoker setup
-```
+1. **`invokerai:setup`** — Main agent reads installed-agent frontmatter, classifies each into a
+   domain by judgment (name-match, description analysis, or unmapped), writes
+   `~/.invoker/agent-map.json` as `{domain: [agents]}`. Run once after adding new agents.
 
-This does two things:
+2. **`invokerai:decompose`** — Main agent builds the bead_graph (domains → DAG of steps),
+   detects multi-agent patterns (pipeline, parallel, supervisor, etc.), optionally writes
+   beads tracking tickets for each step. Closed and pruned on task completion.
 
-1. **Scans installed agents** — InvokerAI walks `~/.claude/agents/` (and other editor locations) and builds `~/.invokerai/agent-map.json`, a `domain → [installed agents]` mapping. The scan is idempotent and additive: re-running adds new agents, never clobbers.
-
-2. **Injects routing protocol** — Adds a routing reminder to `~/.claude/CLAUDE.md` (and `~/.agents/AGENTS.md` if present), telling the host agent: before any multi-domain task → run `invoker spawn` to get the plan → then spawn those agents yourself using your Agent tool.
+3. **`invokerai:spawn`** — Main agent selects an installed agent per domain by description match
+   (via `agent_select.resolve_plan`), emits a fully-resolved, topologically-ordered execution
+   plan with agent names, actions, and dependencies. Hands it back to you.
 
 ### How it works
 
@@ -56,30 +78,25 @@ This does two things:
 Task: "build a REST API with auth and tests"
          │
          ▼
-  invoker spawn "..." --domains backend,security,testing
-         │
-         ├─ Identify domains (you specify or it infers)
-         │
-         ├─ Route: classify the task → pick specialist roles
-         │
-         ├─ Resolve roles → installed agent names from agent-map
-         │
-         ├─ Decompose: detect MAS pattern (pipeline, parallel, etc.)
-         │
-         └─ Return plan: fully-resolved, ordered steps
+  Host agent invokes setup sub-skill (if needed)
+         ▼ reads agent-map or builds it
+  Host agent invokes decompose sub-skill
+         ▼ domains → bead_graph + pattern + steps
+  Host agent invokes spawn sub-skill
+         ├─ Router: classify task → identify domains
+         ├─ Select: per domain, pick agent by description match from agent-map
+         ├─ Resolve: map roles → real installed agent names
+         └─ Return: fully-resolved, ordered plan
          │
          ▼
   Host agent spawns returned agents in order via its own Agent tool
   (Skill plans. Host spawns. Skill never spawns.)
 ```
 
-### Primary surface
+### Primary surface (in-editor)
 
-```bash
-invoker spawn "build a REST API with auth and tests" --domains backend,security,testing
-```
-
-Returns:
+After `invoker setup` (or `npx invokerai-skills` install), the host agent invokes the three
+sub-skills as needed. Internally, they call the routing + selection engine. Result:
 
 ```json
 {
@@ -121,11 +138,14 @@ Returns:
 }
 ```
 
-The host agent then spawns each agent from `steps[]` in order, respecting `parallel: true` flags (parallel-safe steps can run simultaneously).
+The host agent then spawns each agent from `steps[]` in order, respecting `parallel: true` flags.
 
-### Canonical domains
+### Domains
 
-15 domains. Pick only those where real work exists:
+Domains are **dynamic** — derived from your installed agents. The setup sub-skill names them by
+judgment from agent frontmatter. Novel domains (e.g., `legal`, `devrel`, `sales`) route when you
+have agents for them. The built-in seed (below) covers the common case and serves as the
+fallback for text-based inference:
 
 | Domain | Add when... | Skip when... |
 |--------|-------------|--------------|
