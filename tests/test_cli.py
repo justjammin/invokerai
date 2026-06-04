@@ -65,29 +65,32 @@ class TestSpawn:
         out = run_spawn(["refactor the auth service"])
         assert out["spawn_authorized"] is True
 
-    def test_returns_role_and_tools(self):
+    def test_returns_agent_field(self):
+        # Stage-2 lean output: "agent" for solo, "steps[].agent" for crew.
         out = run_spawn(["fix the sql query returning wrong rows"])
-        assert "role" in out
-        assert isinstance(out["tools"], list)
+        assert "agent" in out or "steps" in out
 
-    def test_persona_included_by_default(self):
+    def test_persona_not_in_spawn_output(self):
+        # Persona blob dropped — the installed agent file supplies it on spawn.
         out = run_spawn(["build a new API endpoint"])
-        assert "persona" in out
+        assert "persona" not in out
+        assert "system_prompt_fragment" not in out
 
-    def test_persona_flag_includes_persona(self):
+    def test_persona_flag_is_noop(self):
+        # --persona kept for backward compat; persona no longer emitted.
         buf = StringIO()
         with patch("sys.stdout", buf):
             _handle_spawn(["build a new API endpoint", "--persona"])
         out = json.loads(buf.getvalue())
-        assert "persona" in out
+        assert "persona" not in out
 
     def test_routing_field_present(self):
         out = run_spawn(["explain how the classifier works"])
         assert out["routing"] in ("solo", "crew")
 
-    def test_confidence_field_present(self):
+    def test_session_id_field_present(self):
         out = run_spawn(["add unit tests for the router"])
-        assert isinstance(out["confidence"], int)
+        assert "session_id" in out
 
     def test_orchestrate_includes_pattern_and_steps(self):
         out = run_spawn(
@@ -131,13 +134,13 @@ class TestSpawn:
         out = run_spawn(["add a fastapi endpoint", "--dry-run"])
         assert out["dry_run"] is True
         assert out["spawn_authorized"] is False
-        assert "role" in out
+        assert "agent" in out or "steps" in out
 
-    def test_dry_run_includes_persona(self, tmp_path, monkeypatch):
+    def test_dry_run_no_persona(self, tmp_path, monkeypatch):
         import agent_invoker.cli as cli_mod
         monkeypatch.setattr(cli_mod, "_SPAWN_TOKEN", tmp_path / "spawn_token")
         out = run_spawn(["add a fastapi endpoint", "--dry-run"])
-        assert "persona" in out
+        assert "persona" not in out
 
 
 # ---------------------------------------------------------------------------

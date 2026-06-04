@@ -117,20 +117,48 @@ def _handle_spawn(argv: list[str]) -> None:
         else:
             out_project_context = None
 
+    # Stage 2: resolve stage-1 role/steps to installed agent names from agent-map.json.
+    from agent_invoker.agent_select import load_agent_map, resolve_plan
+    agent_map = load_agent_map()
+    resolved: dict | None = None
+    if agent_map is not None:
+        stage1_plan = {
+            "routing": result.routing,
+            "role": result.role,
+            "steps": result.steps,
+            "pattern": result.pattern,
+            "domains": domains or [],
+        }
+        resolved = resolve_plan(task_text, stage1_plan, agent_map)
+
+    # Lean plan output — no persona blob (the installed agent file supplies persona on spawn).
+    # Shape: {routing, agent (solo) | steps (crew), pattern, domains, coverage_gaps,
+    #         session_id, spawn_authorized}
     out: dict = {
         "routing": result.routing,
-        "role": result.role,
-        "confidence": result.confidence,
-        "tools": result.tools,
-        "source": result.source,
         "spawn_authorized": not args.dry_run,
         "session_id": sid,
     }
-    if result.persona:
-        out["persona"] = result.persona
-    if result.routing == "crew":
+
+    if resolved is not None:
+        if resolved["routing"] == "solo":
+            out["agent"] = resolved["agent"]
+        else:
+            # steps carry {step, domain, agent, action, parallel, role}
+            out["steps"] = resolved["steps"]
+        out["pattern"] = resolved.get("pattern") or result.pattern
+        out["domains"] = resolved.get("domains") or domains or []
+        if resolved.get("coverage_gaps"):
+            out["coverage_gaps"] = resolved["coverage_gaps"]
+    else:
+        # agent-map.json not found — fall back to stage-1 shape with warning.
+        out["agent"] = result.role
+        if result.routing == "crew":
+            out["steps"] = result.steps
         out["pattern"] = result.pattern
-        out["steps"] = result.steps
+        out["domains"] = domains or []
+        out["agent_map_warning"] = "agent-map.json not found — run: invoker setup"
+
     if args.dry_run:
         out["dry_run"] = True
         out["spawn_authorized"] = False
