@@ -366,6 +366,8 @@ def _dispatch_subcommand(argv: list[str]) -> None:
     elif command == "setup":
         from agent_invoker.setup_editors import run
         run()
+        from agent_invoker.agent_map import build_agent_map
+        build_agent_map()
     elif command == "migrate":
         import importlib.util, pathlib
         spec = importlib.util.spec_from_file_location(
