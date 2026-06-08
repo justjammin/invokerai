@@ -4,13 +4,13 @@
 
 # InvokerAI
 
-**InvokerAI routes tasks to specialist agents.** It sits between your task and your coding agent—Claude Code, Cursor, Kiro, or Copilot—and decomposes work into the right specialists instead of letting one generic context window thrash across multiple domains.
+**InvokerAI routes tasks to specialist agents.** It sits between your task and your AI agent (Claude Code, Cursor, Kiro, Copilot, or any agent host) and decomposes work into the right specialists instead of letting one generic context window thrash across multiple domains.
 
 Instead of asking a single agent to "refactor the payment gateway, add Stripe webhooks, and migrate to Postgres 16" all at once, InvokerAI splits the work: a backend specialist handles the gateway, a database specialist handles the migration, and a devops engineer handles the infrastructure. Each gets only the context they need.
 
 ## What You Get
 
-**The Skill** — Agent skill installed via `npx invokerai-skills` (primary) or `invoker setup` (CLI). Runs as sub-skills (setup → decompose → spawn), each PROSE the main agent executes. Plans work; you spawn the agents via your own Agent tool.
+**The Skill** — Agent skill installed via `npx invokerai-skills` (primary) or `invoker setup` (CLI). Runs as sub-skills (setup → decompose → spawn), each a prompt the host agent executes. Plans work; you spawn the agents via your own Agent tool.
 
 **The SDK** — A Python library. Call `orchestrate(task, domains)` → get back a fully-resolved, topologically-ordered plan. No spawning, no execution—you bring your own runtime (Claude Agent SDK, CrewAI, LangGraph, etc.) and call the agents yourself.
 
@@ -58,7 +58,7 @@ The Python path also installs the CLI (`invoker …` commands) and SDK (`import 
 
 ### Three sub-skills working together
 
-The skill is installed as a router + three sub-skills, each executed by the main agent as PROSE:
+The skill installs as a router and three sub-skills, each executed by the host agent as a prompt:
 
 1. **`invokerai:setup`** — Main agent reads installed-agent frontmatter, classifies each into a
    domain by judgment (name-match, description analysis, or unmapped), writes
@@ -271,7 +271,7 @@ invoker log-outcome DATE PREFIX CORRECTIONS ACCEPTED
 
 ## The SDK
 
-### Python library—pure orchestration, no execution.
+### Python library: pure orchestration, no execution.
 
 InvokerAI is available as an importable SDK. It returns plans and agent definitions; executes nothing. You bring the runtime and auth.
 
@@ -453,8 +453,7 @@ def run_with_langgraph(task: str, domains: list[str]):
 
 def create_agent_runnable(name, system_prompt, tools, model):
     """Build a runnable agent with the composed prompt."""
-    # Your implementation: call Claude or another model
-    # with system_prompt as the system context
+    # Your implementation: call your AI agent with system_prompt as the system context
     pass
 
 # Run it
@@ -554,3 +553,7 @@ Registry format:
 ## License
 
 MIT — [Jamin Echols](https://github.com/justjammin)
+
+---
+
+If you like InvokerAI, check out [promper](https://github.com/justjammin/promper) — it turns a rough request into a clean, role-grounded prompt by routing through InvokerAI to inherit the right agent's persona.

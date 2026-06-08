@@ -21,6 +21,29 @@ _FALLBACK_AGENT = "general-purpose"
 
 
 # ---------------------------------------------------------------------------
+# Bucket lookup — find the map key for a domain, with fuzzy fallback
+# ---------------------------------------------------------------------------
+
+def _find_bucket(domain: str, agent_map: dict) -> str | None:
+    """Return the agent-map bucket key for a domain.
+
+    Priority:
+      1. Exact match (fastest path, handles any naming convention)
+      2. Map key contains domain as substring ("backend" in "engineering-backend")
+      3. Domain contains map key as substring ("engineering-backend" contains "backend")
+
+    Returns None if no match found.
+    """
+    domains = agent_map.get("domains", {})
+    if domain in domains:
+        return domain
+    for key in domains:
+        if domain in key or key in domain:
+            return key
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Scoring — term-overlap between task_text and candidate description
 # ---------------------------------------------------------------------------
 
@@ -29,13 +52,12 @@ def _tokenize(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z]{3,}", text.lower())}
 
 
-def _score_candidate(task_text: str, description: str) -> int:
+def _score_candidate(task_tokens: set[str], description: str) -> int:
     """Return overlap count between task tokens and description tokens.
 
     Also adds a bonus for each task token that appears as a substring of the
     description (catches partial matches like 'competitor' inside 'competitors').
     """
-    task_tokens = _tokenize(task_text)
     desc_tokens = _tokenize(description)
     desc_lower = description.lower()
 
@@ -71,7 +93,8 @@ def select_agent(
     None if the domain has no candidates.
     """
     scoring_text = task_text if task_text is not None else task
-    candidates: list[dict] = agent_map.get("domains", {}).get(domain, [])
+    bucket_key = _find_bucket(domain, agent_map)
+    candidates: list[dict] = agent_map.get("domains", {}).get(bucket_key, []) if bucket_key else []
 
     if not candidates:
         return None
@@ -81,8 +104,9 @@ def select_agent(
 
     # Score all candidates, pick the highest.  Tiebreak: alphabetical by name
     # (deterministic, no implicit ordering dependency on map file order).
+    task_tokens = _tokenize(scoring_text)
     scored = [
-        (_score_candidate(scoring_text, c.get("description", "")), c["name"], c)
+        (_score_candidate(task_tokens, c.get("description", "")), c["name"], c)
         for c in candidates
     ]
     scored.sort(key=lambda x: (-x[0], x[1]))
@@ -138,16 +162,22 @@ def resolve_plan(
 
     if routing == "solo":
         stage1_role = plan.get("role")
-        domain = _domain_for_role(stage1_role or "") if stage1_role else None
+        resolved_bucket = None
+        agent_name = None
 
-        if domain:
-            agent_name = _resolve_domain(domain)
-        elif stage1_role and stage1_role in agent_map.get("domains", {}):
-            # Novel domain not in fixed _ROLE_DOMAIN but present as a bucket in the map —
-            # route through it directly without a coverage gap.
-            agent_name = _resolve_domain(stage1_role)
-        else:
-            # Role not in _ROLE_DOMAIN and not a map bucket — emit fallback + gap
+        if stage1_role:
+            # 1. Map-direct: agent-map is source of truth
+            resolved_bucket = _find_bucket(stage1_role, agent_map)
+            if resolved_bucket:
+                agent_name = _resolve_domain(resolved_bucket)
+            else:
+                # 2. _ROLE_DOMAIN bridge: legacy role-name → short domain → map bucket
+                legacy_domain = _domain_for_role(stage1_role)
+                if legacy_domain:
+                    resolved_bucket = legacy_domain
+                    agent_name = _resolve_domain(legacy_domain)
+
+        if agent_name is None:
             coverage_gaps.append({"domain": stage1_role or "unknown", "fallback": _FALLBACK_AGENT})
             agent_name = _FALLBACK_AGENT
 
@@ -155,7 +185,7 @@ def resolve_plan(
             "routing": "solo",
             "agent": agent_name,
             "pattern": plan.get("pattern"),
-            "domains": plan.get("domains", [domain] if domain else []),
+            "domains": plan.get("domains", [resolved_bucket] if resolved_bucket else []),
             "coverage_gaps": coverage_gaps,
         }
 
@@ -163,39 +193,43 @@ def resolve_plan(
     raw_steps: list[dict] = plan.get("steps", [])
     resolved_steps = []
     seen_domains: list[str] = []
+    map_names: set[str] = {
+        e["name"]
+        for bucket in agent_map.get("domains", {}).values()
+        for e in bucket
+        if isinstance(e, dict) and "name" in e
+    }
 
     for step in raw_steps:
         step_role = step.get("role", "")
-        domain = _domain_for_role(step_role)
+        resolved_bucket = None
 
-        if domain:
-            if domain not in seen_domains:
-                seen_domains.append(domain)
-            agent_name = _resolve_domain(domain)
-        elif step_role in agent_map.get("domains", {}):
-            # Novel domain not in fixed _ROLE_DOMAIN but present as a bucket in the map —
-            # route through it directly without a coverage gap.
-            if step_role not in seen_domains:
-                seen_domains.append(step_role)
-            agent_name = _resolve_domain(step_role)
+        # 1. Map-direct: agent-map is source of truth
+        direct = _find_bucket(step_role, agent_map)
+        if direct:
+            resolved_bucket = direct
+            if resolved_bucket not in seen_domains:
+                seen_domains.append(resolved_bucket)
+            agent_name = _resolve_domain(resolved_bucket)
         else:
-            # Role not in _ROLE_DOMAIN and not a map bucket — resolve by trying the
-            # role name directly as an installed-agent name, then fall back.
-            # (Handles meta-roles: "integration-engineer", "api-designer", etc.)
-            map_names = {
-                e["name"]
-                for bucket in agent_map.get("domains", {}).values()
-                for e in bucket
-            }
-            if step_role in map_names:
+            # 2. _ROLE_DOMAIN bridge: legacy role-name → short domain → map bucket
+            legacy_domain = _domain_for_role(step_role)
+            if legacy_domain:
+                resolved_bucket = legacy_domain
+                if legacy_domain not in seen_domains:
+                    seen_domains.append(legacy_domain)
+                agent_name = _resolve_domain(legacy_domain)
+            elif step_role in map_names:
+                # 3. Direct agent name in map
                 agent_name = step_role
             else:
+                # 4. Fallback
                 coverage_gaps.append({"domain": step_role, "fallback": _FALLBACK_AGENT})
                 agent_name = _FALLBACK_AGENT
 
         resolved_steps.append({
             **step,
-            "domain": domain or step_role,
+            "domain": resolved_bucket or step_role,
             "agent": agent_name,
         })
 

@@ -153,7 +153,6 @@ def build_agent_map(
     The full map dict (version/platforms/domains) after the merge.
     """
     global _registry_cache
-    _registry_cache = None  # reset per call so tests with monkeypatching work cleanly
 
     agents_dir = agents_dir or _DEFAULT_AGENTS_DIR
     map_path = map_path or _DEFAULT_MAP_PATH

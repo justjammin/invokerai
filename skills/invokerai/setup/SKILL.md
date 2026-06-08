@@ -5,19 +5,25 @@ description: Build the domain→agent mapping from installed agents. Run once or
 
 # invokerai:setup — Agent Mapping
 
-Build a domain-to-agent mapping from your installed agents. This mapping guides domain classification in decompose and agent selection in spawn.
+Build a domain-to-agent mapping from your installed agents. This mapping is the
+**source of truth** for available domains in decompose and agent selection in spawn.
 
 ---
 
 ## What You Do
 
+### Step 0: Load existing map (if any)
+
+Read `~/.invoker/agent-map.json` if it exists. Record the current domain names.
+You **must preserve** those names — never rename or remove existing domains.
+
 ### Step 1: Scan agent files
 
-Look for agent files in these directories (in order, scan all):
+Look for agent files in these directories (scan all that exist):
 
 - `~/.claude/agents/`
-- `~/.codex/agents/` (if present)
-- `~/.gemini/agents/` (if present)
+- `~/.codex/agents/`
+- `~/.gemini/agents/`
 
 For each `.md` file, extract the frontmatter:
 
@@ -30,69 +36,120 @@ model: <model name (optional)>
 ---
 ```
 
-Collect all agents into a list: `[{name, description, tools, model}, ...]`.
+Skip files with no `name` field. Collect all agents: `[{name, description, tools, model}]`.
 
-### Step 2: Group into domains
+### Step 2: Classify new agents into domains
 
-Read all descriptions. Use your judgment to propose a **bounded domain taxonomy** (~15-40 named domains). Group related agents under shared domain names.
+For agents NOT already in the existing map:
 
-Examples:
-- **backend**: backend-developer, engineering-backend-architect, fullstack-developer
-- **frontend**: frontend-developer, design-ui-designer, design-ux-architect
-- **testing**: test-automator, testing-api-tester, testing-accessibility-auditor
-- **marketing**: marketing-content-creator, marketing-seo-specialist, marketing-social-media-strategist
-- **sales**: sales-engineer, sales-account-strategist, sales-discovery-coach
+1. Read the agent's `name` and `description`.
+2. Assign to a domain using this priority:
+   - **Name match:** If the name clearly signals a domain (e.g. `backend-developer` → `backend`), use that.
+   - **Description match:** Read the description and assign to the closest domain.
+   - **Unmapped:** If no clear domain, assign to `"unmapped"`.
+3. Set `source` to `"name"`, `"description"`, or `"unmapped"` accordingly.
 
-**Critical rules:**
-- Aim for ~15-40 domain names (not 200).
-- A domain with one agent is fine only if it's genuinely a distinct field (e.g., "blockchain", "healthcare", "legal").
-- Avoid per-agent singletons.
-- The taxonomy is YOUR judgment call based on what the agents do.
+**Domain naming rules (critical for resolver compatibility):**
+- Use short, lowercase names: `backend`, `frontend`, `testing`, `ml`, `security`, `devops`, `data`, `architecture`, `documentation`, `mobile`.
+- For non-engineering domains, use clear short names: `marketing`, `sales`, `design`, `product`, `finance`, `legal`, `hr`, `game-dev`, `research`.
+- If an existing domain name in the map already covers the agent, use that exact name.
+- Target 15–40 domains total. Avoid per-agent singletons unless genuinely unique.
 
 ### Step 3: Write agent-map.json
 
-Write `~/.invoker/agent-map.json`:
+Write `~/.invoker/agent-map.json` using this exact schema:
 
 ```json
 {
   "version": 1,
+  "platforms": {
+    "claude": "/Users/<username>/.claude/agents"
+  },
   "domains": {
     "backend": [
-      {"name": "backend-developer", "description": "...", "tools": [...], "model": "sonnet"},
-      {"name": "engineering-backend-architect", "description": "...", "tools": [...], "model": "opus"}
+      {
+        "name": "backend-developer",
+        "description": "Expert backend developer...",
+        "tools": ["Read", "Write", "Bash"],
+        "model": "claude-sonnet-4-6",
+        "source": "name"
+      },
+      {
+        "name": "fullstack-developer",
+        "description": "...",
+        "tools": ["Read", "Write", "Bash", "Edit"],
+        "model": "",
+        "source": "description"
+      }
     ],
     "frontend": [
-      {"name": "frontend-developer", "description": "...", "tools": [...], "model": "sonnet"}
+      {
+        "name": "frontend-developer",
+        "description": "...",
+        "tools": ["Read", "Write", "Edit"],
+        "model": "",
+        "source": "name"
+      }
     ],
-    ...
+    "unmapped": [
+      {
+        "name": "some-unusual-agent",
+        "description": "...",
+        "tools": [],
+        "model": "",
+        "source": "unmapped"
+      }
+    ]
   }
 }
 ```
 
+**Required fields for every entry (no exceptions):**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | string | Agent name from frontmatter |
+| `description` | string | From frontmatter; empty string `""` if absent |
+| `tools` | array | List of strings; empty array `[]` if absent |
+| `model` | string | From frontmatter; empty string `""` if absent |
+| `source` | string | Must be `"name"`, `"description"`, or `"unmapped"` |
+
+**Top-level required keys:**
+
+| Key | Type | Notes |
+|-----|------|-------|
+| `version` | integer | Always `1` |
+| `platforms` | object | Map of `platform → agents_dir_path`; always include `"claude"` |
+| `domains` | object | Map of `domain_name → [agent entries]` |
+
 **Idempotent + additive:**
-- If `~/.invoker/agent-map.json` already exists, merge the new agents.
-- Keep existing domain buckets and hand-edits.
-- Never clobber the file; only add or update agent entries.
+- Agents already in the map: keep as-is. Do not update or re-classify.
+- New agents: append to the matching domain bucket.
+- Never remove existing entries.
+- Never rename existing domain buckets.
 
 ### Step 4: Report
 
-Output a summary:
-
 ```
 Agent map built: ~/.invoker/agent-map.json
-Domains: <count> (backend, frontend, testing, marketing, security, ...)
-Agents mapped: <count>
-Unmapped agents (if any): <list>
+Domains: <count> (<name>, <name>, ...)
+Agents mapped: <count> new, <count> existing
+Unmapped: <count> (run again after adding specialist agents)
 ```
 
 ---
 
 ## Why This Exists
 
-The Python CLI `invoker setup` builds a map via keyword classification. This sub-skill uses the main agent's judgment for better, more semantically accurate domain naming. Both write the same `~/.invoker/agent-map.json` file shape, so they can be used interchangeably.
+`invoker setup` (CLI) builds the map via keyword classification. This sub-skill
+uses the host agent's judgment for semantically accurate domain assignment. Both
+write the same `~/.invoker/agent-map.json` schema — they are interchangeable.
+The map is read by `invokerai:decompose` (domain discovery) and `invokerai:spawn`
+(agent selection).
 
 ---
 
 ## Next Steps
 
-After setup completes, use `/invokerai:decompose` to break a task into a DAG, then `/invokerai:spawn` to select and execute agents.
+After setup completes, use `/invokerai:decompose` to break a task into a DAG
+using the domains in the map, then `/invokerai:spawn` to select and execute agents.
