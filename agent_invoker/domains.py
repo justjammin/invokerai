@@ -80,6 +80,15 @@ _ROLE_DOMAIN: dict[str, str] = {
     "sre": "devops",
     "code-simplifier": "code-review",
     "integration-engineer": "architecture",
+    "content-marketer": "marketing",
+    "business-analyst": "business",
+    "competitive-analyst": "business",
+    "trend-analyst": "business",
+    "project-manager": "business",
+    "project-idea-validator": "business",
+    "research-analyst": "research",
+    "debugger": "backend",
+    "error-detective": "backend",
 }
 
 _SUBDOMAIN_TRIGGERS: list[tuple[str, str, list[str]]] = [
@@ -97,6 +106,7 @@ _SUBDOMAIN_TRIGGERS: list[tuple[str, str, list[str]]] = [
     ("mobile", "swift", ["swift", "swiftui", "uikit", "xcode", "ios ", "macos app"]),
     ("ml", "llm", ["llm", "rag", "prompt", "embedding", "langchain", "langgraph", "openai", "anthropic"]),
     ("ml", "training", ["pytorch", "tensorflow", "sklearn", "model training", "fine-tun", "checkpoint"]),
+    ("marketing", "paid-search", ["ppc", "google ads", "paid search", "sem", "adwords", "bid strategy", "roas", "campaign budget", "meta ads", "ad spend"]),
 ]
 
 _TIER3_TRIGGERS: list[tuple[str, str, str, list[str]]] = [
@@ -153,6 +163,9 @@ _EXPLICIT_DOMAIN_ROLE: dict[str, str] = {
     "mobile": "mobile-developer",
     "data": "data-engineer",
     "code-review": "code-reviewer",
+    "marketing": "content-marketer",
+    "business": "business-analyst",
+    "research": "research-analyst",
 }
 
 CANONICAL_DOMAINS = list(_EXPLICIT_DOMAIN_ROLE.keys())
@@ -166,6 +179,9 @@ _DOMAIN_ROLE_MAP: list[tuple[str, str, str]] = [
     ("ml", r"\b(model|training|inference|embedding|\bllm\b|fine.?tun|rag|vector|neural)\b", "ml-engineer"),
     ("testing", r"\b(test|spec|coverage|e2e)\b", "test-automator"),
     ("docs", r"\b(document|docs|readme|guide|tutorial)\b", "technical-writer"),
+    ("marketing", r"\b(market|marketing|campaign|content strategy|seo|brand|audience|funnel|ppc|paid search|ads|conversion rate)\b", "content-marketer"),
+    ("business", r"\b(business|stakeholder|requirement|competitor|competitive|roadmap|kpi|okr|process|prioritization|roi|market research)\b", "business-analyst"),
+    ("research", r"\b(research|investigate|literature|synthesi|findings|systematic review|primary source|comparative analysis)\b", "research-analyst"),
 ]
 
 _ROLE_LABELS: dict[str, str] = {
@@ -183,6 +199,9 @@ _ROLE_LABELS: dict[str, str] = {
     "data-engineer": "data pipeline",
     "code-simplifier": "code polish",
     "integration-engineer": "integration layer",
+    "content-marketer": "marketing",
+    "business-analyst": "business analysis",
+    "research-analyst": "research",
 }
 
 _CATEGORY_PRIORITY = {
