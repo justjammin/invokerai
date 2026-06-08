@@ -25,73 +25,74 @@ _INVOKERAI_NODE_BODY = """\
 ## InvokerAI — Agent Router
 
 **YOUR ROLE: orchestrator/planner ONLY.** Never write code. Never implement directly.
-Before any multi-step or multi-domain task: decompose into domains, run `invoker spawn`, then
-spawn the returned installed agents yourself using your own Agent tool in step order.
+Before any multi-step or multi-domain task: read the agent-map, decompose into a DAG,
+select agents, then spawn them in order via your own Agent tool.
 
 **Operating contract (host agent):**
 
-1. **Identify domains** for the task (1–N from the list below).
-2. **Run `invoker spawn`** to get the lean execution plan:
+1. **Discover domains** — Read `~/.invoker/agent-map.json` to see installed domains + agents.
+   ```bash
+   cat ~/.invoker/agent-map.json
    ```
-   invoker spawn "TASK" --domains d1,d2
-   ```
-   Returns: `{routing, agent|steps, pattern, domains, spawn_authorized, session_id}`
-   - `routing == "solo"` → one agent name in `agent`
-   - `routing == "crew"` → ordered steps in `steps[]`, each with `agent`, `action`, `parallel`
-3. **Spawn the returned agents yourself** via your own Agent tool, respecting step order and
-   `parallel: true` flags. The skill plans; you spawn.
-4. **Optional:** if `bd` (beads) is installed, you may create a tracking ticket per spawned
-   agent — but crew execution is fully functional without it.
+   If the map is missing, run `/invokerai:setup` first.
 
-**`invoker spawn` output shape:**
+2. **Decompose** — Run `/invokerai:decompose` with the task and discovered domains.
+   Always do this — even single-step tasks produce a single-node bead_graph.
+   Returns a `bead_graph` DAG: each node has `id`, `domain`, `action`, `deps`, `parallel`.
+
+3. **Select agents** — Run `/invokerai:spawn` with the bead_graph.
+   Fills `agent` on each node (best-match per domain × task scoring from the map).
+   If `bd` is available, creates a ticket per node and a parent epic.
+
+4. **Execute** — Spawn each node's agent yourself via your own Agent tool:
+   - Process in dependency order (nodes where `deps: []` first)
+   - Respect `parallel: true` — concurrent spawns at the same DAG level
+   - **Pass the bd ticket ID in the agent prompt** (if bd is available) so the agent
+     closes and prunes its own ticket on completion
+
+**`/invokerai:spawn` output shape:**
 ```
 {
-  "routing": "solo" | "crew",
-  "agent": "<installed-agent-name>",      // solo only
-  "steps": [                              // crew only
-    {"step": 1, "agent": "...", "action": "...", "parallel": false, "domain": "..."},
-    ...
+  "bead_graph": [
+    {"id": "node-1", "domain": "architecture", "action": "...", "agent": "architect-reviewer",  "deps": [],          "parallel": false},
+    {"id": "node-2", "domain": "backend",       "action": "...", "agent": "backend-developer",  "deps": ["node-1"],  "parallel": false},
+    {"id": "node-3", "domain": "testing",       "action": "...", "agent": "test-automator",     "deps": ["node-2"],  "parallel": true}
   ],
   "pattern": "pipeline" | "parallel" | "plan_then_execute" | "feedback_loop" | ...,
-  "domains": ["backend", "testing"],
-  "spawn_authorized": true,
-  "session_id": "default"
+  "domains": ["architecture", "backend", "testing"],
+  "coverage_gaps": []
 }
 ```
 
-**Canonical domains** (pass 1–N):
-`architecture` | `backend` | `frontend` | `database` | `devops` | `security`
-`ml` | `testing` | `documentation` | `mobile` | `data` | `code-review`
+**Available domains — read from agent-map first:**
+Before decomposing, read `~/.invoker/agent-map.json` to see which domains have installed agents.
+Use only domain names present in the map.
 
-**Domain precision rule (critical):** `steps[]` is shaped by `domains[]` you pass — wrong
-domains → phantom steps → wasted agents.
+If the map is missing or `~/.invoker/agent-map.json` does not exist, run `/invokerai:setup` first.
+
+**Domain precision rule (critical):** the bead_graph is shaped by domains you provide to decompose —
+wrong domains → phantom steps → wasted agents.
 - Pass ONLY domains where real work exists. Ask: "does this task actually touch this layer?"
 - When unsure, under-specify — low confidence will surface missing domains.
 - Never add a domain speculatively.
 
 **Domain decision guide:**
 
-| Domain | Add when... | Skip when... |
-|--------|-------------|--------------|
-| `architecture` | New subsystem design, cross-cutting redesign, impl agent needs codebase context before it can safely start, "how should we structure X?" | Bug fix, additive feature with clear scope, impl path is obvious |
-| `backend` | Server routes, REST/GraphQL APIs, IPC handlers, business logic, auth middleware | Pure UI work, DB-only schema changes with no server code |
-| `frontend` | UI components, styling, client-side state, browser events, rendering | Server-only work, no user-facing changes |
-| `database` | Schema changes, migrations, query optimization, indexes, ORM models | No DB reads/writes in the task |
-| `devops` | CI/CD pipelines, Dockerfiles, infra config, deploy scripts, env vars | App code changes only |
-| `security` | Auth flows, permissions, secrets handling, input validation, CVE fixes | Feature work with no trust boundary changes |
-| `ml` | Model training, inference, embeddings, prompt engineering, vector search | Standard CRUD with no ML components |
-| `testing` | Writing/fixing tests, test infra, coverage gaps, flaky test diagnosis | Impl work where tests are a side effect (let impl agent write them) |
-| `documentation` | API docs, READMEs, changelogs, docstrings, user guides | Code-only changes with no public surface |
-| `mobile` | iOS/Android native code, React Native, Flutter, mobile-specific APIs | Web-only work |
-| `data` | ETL pipelines, data transforms, analytics queries, reporting | App features with no data pipeline involvement |
-| `code-review` | Reviewing a diff/PR, auditing quality/security, post-impl review | Active implementation (review ≠ build) |
+Read `~/.invoker/agent-map.json` to see all available domains and which agents
+handle each one. Use only domains present in the map. General rules:
 
-**As a subagent:** run `invoker confirm "task" "expected-role"` on your first turn to verify
-you are the correct specialist for this task.
+- Add a domain only when real work for that domain exists in the task.
+- Skip domains where all work is a side effect of another domain.
+- Under-specify rather than over-specify — low confidence will surface missing domains.
+- For tasks touching non-engineering domains (marketing, sales, design, etc.),
+  check the map — those agents are available if installed.
+
+**As a subagent:** verify you are the correct specialist on your first turn.
+Review the task description and confirm it matches your domain before proceeding.
 
 **SKILL BYPASS:** When running inside a skill invocation (/graphify, /kyoko, /hyperframes,
-/remotion, /weave, etc.), skills manage their own agent spawning — do not call `invoker spawn`.
-InvokerAI routing applies only to direct user tasks."""
+/remotion, /weave, etc.), skills manage their own agent spawning — do not call `/invokerai:decompose`
+or `/invokerai:spawn`. InvokerAI routing applies only to direct user tasks."""
 
 CLAUDE_MD_NODE = f"{INVOKERAI_MARKER_START}\n{_INVOKERAI_NODE_BODY}\n{INVOKERAI_MARKER_END}"
 AGENTS_MD_NODE = CLAUDE_MD_NODE
@@ -99,112 +100,96 @@ AGENTS_MD_NODE = CLAUDE_MD_NODE
 
 _SUBAGENT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SubagentStart\",\"additionalContext\":"
-    "\"InvokerAI: run invoker confirm \\\\\\\"task\\\\\\\" \\\\\\\"expected-role\\\\\\\" on first turn — verify correct specialist. "
+    "\"InvokerAI: verify correct specialist on first turn — confirm task matches your domain. "
     "ROLE: orchestrator/planner ONLY. Never write code. Never implement directly. "
-    "Identify 1+ domains from: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
-    "Run: invoker spawn \\\\\\\"TASK\\\\\\\" --domains d1,d2 → returns installed agent names + MAS pattern + ordered steps. "
-    "Then spawn those agents yourself via your own Agent tool in step order. Skill plans; host spawns. "
+    "Read ~/.invoker/agent-map.json to discover domains. "
+    "Run /invokerai:decompose to build DAG, /invokerai:spawn to select agents, then spawn via Agent tool. "
     "CAVEMAN MODE ULTRA: drop articles/filler/hedging/pleasantries. Fragments OK. Short synonyms. "
     "Abbreviate (DB/auth/config/req/res/fn/impl). Arrows for causality (X->Y). One word when one word enough. "
     "Code blocks unchanged. Technical terms exact.\"}}'"
 )
 _SUBAGENT_HOOK_MARKER = "InvokerAI"
-_SUBAGENT_HOOK_CURRENT_MARKER = "hookEventName"
+_SUBAGENT_HOOK_CURRENT_MARKER = "invokerai:decompose"
 
 _PROMPT_HOOK_COMMAND = (
     "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":"
-    "\"InvokerAI: before any task, decompose into domains, run invoker spawn \\\\\\\"TASK\\\\\\\" --domains d1,d2 for the plan, "
+    "\"InvokerAI: before any task, read ~/.invoker/agent-map.json for available domains, "
+    "run /invokerai:decompose to build the execution DAG, /invokerai:spawn to select agents, "
     "then spawn the returned installed agents yourself in order. "
-    "Domains: architecture|backend|frontend|database|devops|security|ml|testing|documentation|mobile|data|code-review. "
     "Never do coding tasks directly — only plan and orchestrate.\"}}'"
 )
 _PROMPT_HOOK_MARKER = "InvokerAI"
-_PROMPT_HOOK_CURRENT_MARKER = "returned installed agents"
+_PROMPT_HOOK_CURRENT_MARKER = "/invokerai:decompose"
 
 
-def _inject_subagent_hook(settings: dict) -> bool:
-    """Add SubagentStart hook — fires inside the spawned agent's own context.
+def _inject_hook(
+    settings: dict,
+    hooks_key: str,
+    marker: str,
+    current_marker: str,
+    command: str,
+) -> bool:
+    """Inject a single hook entry into settings, replacing stale InvokerAI entries.
 
-    Replaces ALL stale InvokerAI entries in a single pass (avoids duplicates
-    when multiple stale entries accumulate across upgrades).
+    Replaces all stale entries (marker present, current_marker absent) in one pass
+    and appends a fresh entry if none with current_marker is found.
+    Returns True if settings were modified.
     """
     hooks = settings.setdefault("hooks", {})
-    subagent = hooks.setdefault("SubagentStart", [])
+    entries = hooks.setdefault(hooks_key, [])
 
     found_current = False
     changed = False
-    new_subagent = []
+    new_entries = []
 
-    for entry in subagent:
+    for entry in entries:
         new_inner = []
         for h in entry.get("hooks", []):
             cmd = h.get("command", "")
-            if _SUBAGENT_HOOK_MARKER in cmd:
-                if _SUBAGENT_HOOK_CURRENT_MARKER in cmd:
-                    # already current — keep as-is, mark found
+            if marker in cmd:
+                if current_marker in cmd:
                     new_inner.append(h)
                     found_current = True
                 else:
-                    # stale — drop (will re-add once below if no current found yet)
-                    changed = True
+                    changed = True  # stale — drop
             else:
                 new_inner.append(h)
         if new_inner:
             new_entry = dict(entry)
             new_entry["hooks"] = new_inner
-            new_subagent.append(new_entry)
+            new_entries.append(new_entry)
         elif new_inner != entry.get("hooks", []):
             changed = True  # entry became empty, drop it
 
     if changed:
-        hooks["SubagentStart"] = new_subagent
+        hooks[hooks_key] = new_entries
 
-    if found_current:
-        return changed  # cleaned up stale entries but didn't need to add
-
-    # No current entry — append fresh
-    new_subagent.append({
-        "hooks": [{"type": "command", "command": _SUBAGENT_HOOK_COMMAND}],
-    })
-    hooks["SubagentStart"] = new_subagent
-    return True
-
-
-def _inject_prompt_hook(settings: dict) -> bool:
-    """Add UserPromptSubmit hook — stdout injected into context, nudges CLI routing."""
-    hooks = settings.setdefault("hooks", {})
-    submit = hooks.get("UserPromptSubmit", [])
-
-    found_current = False
-    changed = False
-    new_submit = []
-    for entry in submit:
-        new_inner = []
-        for h in entry.get("hooks", []):
-            cmd = h.get("command", "")
-            if _PROMPT_HOOK_MARKER in cmd:
-                if _PROMPT_HOOK_CURRENT_MARKER in cmd:
-                    new_inner.append(h)
-                    found_current = True
-                else:
-                    changed = True  # stale — outdated content
-            else:
-                new_inner.append(h)
-        if new_inner:
-            new_entry = dict(entry)
-            new_entry["hooks"] = new_inner
-            new_submit.append(new_entry)
-
-    if changed:
-        hooks["UserPromptSubmit"] = new_submit
     if found_current:
         return changed
 
-    new_submit.append({
-        "hooks": [{"type": "command", "command": _PROMPT_HOOK_COMMAND}],
-    })
-    hooks["UserPromptSubmit"] = new_submit
+    new_entries.append({"hooks": [{"type": "command", "command": command}]})
+    hooks[hooks_key] = new_entries
     return True
+
+
+def _inject_subagent_hook(settings: dict) -> bool:
+    return _inject_hook(
+        settings,
+        "SubagentStart",
+        _SUBAGENT_HOOK_MARKER,
+        _SUBAGENT_HOOK_CURRENT_MARKER,
+        _SUBAGENT_HOOK_COMMAND,
+    )
+
+
+def _inject_prompt_hook(settings: dict) -> bool:
+    return _inject_hook(
+        settings,
+        "UserPromptSubmit",
+        _PROMPT_HOOK_MARKER,
+        _PROMPT_HOOK_CURRENT_MARKER,
+        _PROMPT_HOOK_COMMAND,
+    )
 
 
 def setup_claude_code(pkg_dir: Path) -> bool:

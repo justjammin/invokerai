@@ -69,12 +69,21 @@ node-1 (domain: architecture, action: "Create implementation plan")
 Process the nodes in dependency order:
 
 1. **Identify the first level:** nodes with `deps: []` (no dependencies).
-2. **Spawn all level-1 nodes:** For each node, spawn the selected agent via YOUR OWN Agent tool.
-3. **Wait for completion:** Monitor execution. When all level-1 agents complete, record results.
-4. **Mark as running (BEADS):** If `bd` is available, mark the corresponding tickets as running:
+2. **Mark as running (BEADS):** Before spawning, if `bd` is available, mark the ticket running:
    ```bash
-   bd update TICKET-124 --status running
+   bd update <ticket_id> --status running
    ```
+3. **Spawn the agent:** For each node, spawn the selected agent via YOUR OWN Agent tool.
+   **Pass the bd ticket ID in the agent prompt** so the agent can close and prune its own ticket:
+   ```
+   Your task: <action>
+   BEADS ticket: <ticket_id>   ← include this line if bd is available
+   When your work is complete, run:
+     bd close <ticket_id> --reason "Completed"
+     bd delete <ticket_id>
+   ```
+   If `bd` is absent, omit the ticket lines entirely.
+4. **Wait for completion:** Monitor execution. When all level agents complete, record results.
 5. **Next level:** Identify nodes whose deps are all satisfied. Spawn them (respecting `parallel: true` flags for concurrent execution).
 6. **Repeat:** Until all nodes are spawned and completed.
 
@@ -82,21 +91,18 @@ Process the nodes in dependency order:
 
 ### Step 4: BEADS lifecycle (critical)
 
-**Mark running:**
-When a node's agent is spawned, update the ticket:
+**Ownership split:**
+- **Orchestrator** (you): creates tickets in decompose, marks running before spawn.
+- **Spawned agent**: closes + prunes its own ticket when work is done.
+
+**Mark running (orchestrator, before spawn):**
 ```bash
 bd update <ticket_id> --status running
 ```
 
-**Mark complete:**
-When an agent completes, mark the ticket done:
+**Mark complete + prune (spawned agent, in its own session):**
 ```bash
 bd close <ticket_id> --reason "Completed by <agent_name>"
-```
-
-**Prune (delete):**
-After closing, DELETE the ticket from the store to keep `.beads` small:
-```bash
 bd delete <ticket_id>
 ```
 

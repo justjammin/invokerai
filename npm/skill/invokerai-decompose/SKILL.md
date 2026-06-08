@@ -11,13 +11,27 @@ Break a task into a directed acyclic graph (DAG) of execution steps, each with i
 
 ## What You Do
 
-### Step 1: Identify domains
+### Step 0: Discover available domains from agent-map
 
-Given a task description and an explicit list of domains (from the caller):
+Read `~/.invoker/agent-map.json`. Extract the `domains` keys — these are the
+**only valid domains** for decomposition. Do not invent domains that aren't in the map.
 
-- Map each domain to the agent-map (built by invokerai:setup)
-- Validate that the domains are reasonable for the task
-- Note any domains with no installed agents (coverage gaps)
+```bash
+# Read the map to discover available domains
+cat ~/.invoker/agent-map.json
+```
+
+Extract domain names: `["backend", "frontend", "testing", "marketing", ...]`
+
+If the map does not exist or is empty, run `/invokerai:setup` first.
+
+### Step 1: Identify domains for this task
+
+Given the task description and the domains discovered in Step 0:
+
+- Select only domains where **real work exists** for this task
+- Validate each selected domain is present in the agent-map
+- Note any required domains with no installed agents (coverage gaps)
 
 ### Step 2: Build the bead_graph
 

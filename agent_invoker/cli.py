@@ -112,10 +112,6 @@ def _handle_spawn(argv: list[str]) -> None:
                     "frequent_roles": sorted(mem.get("role_counts", {}).items(), key=lambda x: -x[1])[:3],
                     "last_domains": mem.get("last_domains", []),
                 }
-            else:
-                out_project_context = None
-        else:
-            out_project_context = None
 
     # Stage 2: resolve stage-1 role/steps to installed agent names from agent-map.json.
     from agent_invoker.agent_select import load_agent_map, resolve_plan
