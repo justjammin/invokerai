@@ -20,7 +20,13 @@ Instead of asking a single agent to "refactor the payment gateway, add Stripe we
 
 ### Primary: Skill (npm)
 
-Requires Node 18+. Install the skill package:
+Requires Node 18+. Fastest path — no global install, copies the skill straight into `~/.claude/skills`:
+
+```bash
+npx invokerai-skills
+```
+
+Or install the package (adds the `invokerai-skills` command for re-running with flags like `--user` / `--project`):
 
 ```bash
 npm install -g invokerai-skills
@@ -51,6 +57,21 @@ source ~/.invokerai/venv/bin/activate
 ```
 
 The Python path also installs the CLI (`invoker …` commands) and SDK (`import agent_invoker`). Run `invoker setup` once to build the agent map.
+
+### Claude Code plugin
+
+InvokerAI ships a plugin manifest, so you can install it from Claude Code's plugin marketplace. Add the marketplace, then install the plugin:
+
+```
+/plugin marketplace add justjammin/invokerai
+/plugin install invokerai@invokerai
+```
+
+Or run `/plugin`, open the **Discover** tab, search for `invokerai`, and press Enter to pick the install scope (user / project / local).
+
+### Upgrading from the old MCP build
+
+Earlier versions registered an `invokerai` MCP server and per-editor hooks. The current build is skill + CLI + SDK only — no MCP. The new code won't auto-remove the old live registrations, so on any device where the old `invoker setup` ran, follow the per-device checklist in [`docs/MCP_CLEANUP.md`](docs/MCP_CLEANUP.md) (read-only audit first, then guided removal with backups). Fresh installs can skip this.
 
 ---
 
