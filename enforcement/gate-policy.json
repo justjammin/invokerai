@@ -1,0 +1,8 @@
+{
+  "mode": "always-block",
+  "exempt_file": "~/.invoker/exempt-paths.json",
+  "exempt_marker": ".invoker-allow-direct",
+  "agent_map": "~/.invoker/agent-map.json",
+  "gate_tools": ["Edit", "Write", "MultiEdit", "NotebookEdit", "Task", "Agent"],
+  "gate_cwd_repo_only": true
+}

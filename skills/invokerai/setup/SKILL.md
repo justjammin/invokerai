@@ -137,6 +137,77 @@ Agents mapped: <count> new, <count> existing
 Unmapped: <count> (run again after adding specialist agents)
 ```
 
+### Step 5: Install the enforcement gate (optional)
+
+The enforcement gate is a best-effort guardrail that keeps the main thread in its
+orchestrator-only lane: it blocks direct edits to files **inside the active project repo**
+(the git repo the session is `cd`'d in) and nudges you to route specialist work through
+`/invokerai:decompose` → `/invokerai:spawn`. Everything outside that repo stays free.
+It is **fail-open** (a bug never bricks tools) and has a one-line kill switch.
+
+Templates live in the repo's `enforcement/` directory. If you installed via `npx
+invokerai-skills`, that directory is not in the npm payload — clone the repo
+(`git clone https://github.com/justjammin/invokerai`) to get it, then use that path as
+`<repo>/enforcement` below.
+
+Only do this if the user wants the gate. Run these steps in order.
+
+**1. Create the state directory.**
+
+```bash
+mkdir -p ~/.invoker/state
+```
+
+**2. Copy the hooks into `~/.claude/hooks/` and mark them executable.**
+
+```bash
+mkdir -p ~/.claude/hooks
+cp <repo>/enforcement/invoker-gate.js ~/.claude/hooks/invoker-gate.js
+cp <repo>/enforcement/invoker-mark.js ~/.claude/hooks/invoker-mark.js
+chmod +x ~/.claude/hooks/invoker-gate.js ~/.claude/hooks/invoker-mark.js
+```
+
+**3. Install the policy + exempt templates — only if absent (never clobber an existing
+policy the user has tuned).**
+
+```bash
+[ -f ~/.invoker/gate-policy.json ]  || cp <repo>/enforcement/gate-policy.json  ~/.invoker/gate-policy.json
+[ -f ~/.invoker/exempt-paths.json ] || cp <repo>/enforcement/exempt-paths.json ~/.invoker/exempt-paths.json
+```
+
+**4. Patch `~/.claude/settings.json` to wire the three hook groups (idempotent, backs up
+first).** The packaged `enforcement/patch-settings.js` does this safely — it reads the
+JSON, adds a group only if that event does not already reference the target script,
+writes a timestamped backup, validates, and writes back:
+
+```bash
+node <repo>/enforcement/patch-settings.js ~/.claude/settings.json ~/.claude/hooks
+```
+
+It adds (and only if not already present):
+
+| Event | matcher | command |
+|-------|---------|---------|
+| `PreToolUse` | `Edit\|Write\|MultiEdit\|NotebookEdit\|Task\|Agent` | `node ~/.claude/hooks/invoker-gate.js` |
+| `PostToolUse` | `Task\|Agent\|Skill` | `node ~/.claude/hooks/invoker-mark.js` |
+| `SubagentStart` | `` (empty — all) | `node ~/.claude/hooks/invoker-mark.js` |
+
+If you prefer not to run the script, back up `settings.json` first
+(`cp ~/.claude/settings.json ~/.claude/settings.json.bak.$(date +%s)`) and add those three
+groups by hand, deduping by command string so you never double-wire.
+
+**5. Report to the user:**
+
+```
+Enforcement gate installed.
+- Edits are gated ONLY inside the repo your session is cd'd in. Everything else is free.
+- Kill switch: set "mode":"off" in ~/.invoker/gate-policy.json (re-read every call, no restart).
+- Allow direct edits in a path: add an entry to "exempt" in ~/.invoker/exempt-paths.json
+  ({ "name":"...", "path":"/abs/path", "reason":"..." }), or drop a .invoker-allow-direct
+  file in that directory.
+- It is fail-open and best-effort: Bash/heredoc writes and out-of-editor runtimes bypass it.
+```
+
 ---
 
 ## Why This Exists

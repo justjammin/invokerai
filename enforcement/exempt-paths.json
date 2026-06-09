@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "comment": "Roots where the main thread may edit directly (gate bypassed). Absolute-path prefixes.",
+  "exempt": []
+}

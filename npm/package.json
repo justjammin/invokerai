@@ -1,6 +1,6 @@
 {
   "name": "invokerai-skills",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "InvokerAI — agent routing brain as Claude Code / Agent Skills. setup builds a domain→agent map; decompose breaks tasks into a DAG; spawn selects and fires installed specialists.",
   "bin": {
     "invokerai-skills": "./install.js"
